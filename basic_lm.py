@@ -105,11 +105,11 @@ def train(config: Config | None = None):
             for inputs, targets in data_loader(config.batch_size, config.seq_len):
                 with torch.autocast(device_type=device, enabled=device=="cuda"):
                     embs = model(inputs.to(device))
-                loss = linear_cross_entropy(
-                    embs.view(-1, embs.shape[-1]),
-                    model.classifier,
-                    targets.reshape(-1).to(device)
-                )
+                    loss = linear_cross_entropy(
+                        embs.view(-1, embs.shape[-1]),
+                        model.classifier,
+                        targets.reshape(-1).to(device)
+                    )
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
