@@ -61,7 +61,7 @@ def train_ddp(config: Config | None = None):
         steps_so_far += 1
         if pbar and steps_so_far % 25 == 0:
             pbar.set_description(f"loss: {loss.item():.1f}, lr: {scheduler.get_last_lr()[0]:.1e}")
-            pbar.update(1)
+            pbar.update(steps_so_far - pbar.n)
         if steps_so_far >= config.total_steps:
             break
 
