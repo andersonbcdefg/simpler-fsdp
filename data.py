@@ -4,6 +4,7 @@ import numpy as np
 import tiktoken
 import datasets
 import random
+from collections import deque
 encoding = tiktoken.encoding_for_model("gpt-4")
 
 def generate_data():
@@ -42,25 +43,38 @@ def data_loader(batch_size, seq_len, device_id: int = 0):
             batch = shaped_tokens[rand_idxs[i:i+batch_size], :]
             yield batch[:, :-1], batch[:, 1:]
 
-def data_loader_fast(batch_size, seq_len, device_id: int = 0):
+def data_loader_fast(batch_size, seq_len, device_id: int = 0, buffer_size: int = 1024):
     filename=f'final_data_{device_id}.bin'
     tokens = np.memmap(filename, dtype=np.uint32, mode="r")
     total_len = len(tokens)
     stride = seq_len + 1
     pos = 0
 
+    buffer = deque()
+    def read_seq():
+        nonlocal pos
+        if pos + stride >= total_len:
+            pos = 0
+        chunk = tokens[pos : pos + stride].copy()
+        pos += stride
+        return torch.from_numpy(chunk)
+
+    # Fill initial buffer
+    for _ in range(buffer_size):
+        buffer.append(read_seq())
+
     while True:
-        needed = batch_size * stride
-        if pos + needed >= total_len:
-            pos = 0  # wrap around to start
-        chunk = tokens[pos : pos + needed]
-        chunk = chunk.reshape(batch_size, stride)
-        inputs = torch.from_numpy(chunk[:, :-1]).long().pin_memory()
-        inputs = inputs.to(device_id, non_blocking=True)
-        targets = torch.from_numpy(chunk[:, 1:]).long().pin_memory()
-        targets = targets.to(device_id, non_blocking=True)
-        pos += needed
-        yield inputs, targets
+        inputs = torch.empty((batch_size, seq_len), dtype=torch.long, device=device_id).pin_memory()
+        targets = torch.empty((batch_size, seq_len), dtype=torch.long, device=device_id).pin_memory()
+
+        for i in range(batch_size):
+            # Pop a random item for training
+            j = random.randint(0, len(buffer) - 1)
+            seq = buffer[j]
+            inputs[i] = seq[:-1]
+            targets[i] = seq[1:]
+            buffer[j] = read_seq()  # replace with new data
+        yield inputs.to(device_id, non_blocking=True), targets.to(device_id, non_blocking=True)
 
 if __name__ == "__main__":
     import sys
