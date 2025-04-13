@@ -43,7 +43,11 @@ def train_ddp(config: Config | None = None):
     losses = []
     steps_so_far = 0
     pbar = tqdm(total=config.total_steps) if device_id == 0 else None
-    for inputs, targets in data_loader_fast(config.batch_size // world_size, config.seq_len, shard=device_id):
+    for inputs, targets in data_loader_fast(
+        config.batch_size // world_size,
+        config.seq_len,
+        device_id=device_id
+    ):
         with torch.autocast(device_type="cuda"):
             embs = ddp_model(inputs.to(device_id))
             loss = linear_cross_entropy(
