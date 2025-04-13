@@ -96,8 +96,8 @@ def train(config: Config | None = None):
     with open(f"runs/{timestamp}.txt", "w") as f:
         with tqdm(total=config.total_steps) as pbar:
             for inputs, targets in data_loader(config.batch_size, config.seq_len):
-                logits = model(torch.from_numpy(inputs).to(device))
-                loss = F.cross_entropy(logits.view(-1, logits.shape[-1]), torch.from_numpy(targets).reshape(-1).to(device))
+                logits = model(inputs.to(device))
+                loss = F.cross_entropy(logits.view(-1, logits.shape[-1]), targets.reshape(-1).to(device))
                 loss.backward()
                 optimizer.step()
                 optimizer.zero_grad()
