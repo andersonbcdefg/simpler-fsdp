@@ -69,8 +69,9 @@ TOTAL_STEPS = 1000
 WARMUP_STEPS = 50
 
 def train():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     timestamp = time.time()
-    model = Transformer(100_352, 128, 4, 3).to("mps")
+    model = Transformer(100_352, 128, 4, 3).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer, lambda step: step / WARMUP_STEPS if step < WARMUP_STEPS else (TOTAL_STEPS - step) / (TOTAL_STEPS - WARMUP_STEPS)
@@ -80,7 +81,7 @@ def train():
     with open(f"runs/{timestamp}.txt", "w") as f:
         with tqdm(total=TOTAL_STEPS) as pbar:
             for batch in data_loader(BATCH_SIZE * (SEQ_LEN + 1)):
-                tokens = torch.from_numpy(batch).view(BATCH_SIZE, SEQ_LEN + 1).long().to("mps")
+                tokens = torch.from_numpy(batch).view(BATCH_SIZE, SEQ_LEN + 1).long().to(device)
                 logits = model(tokens[:, :-1])
                 targets = tokens[:, 1:]
                 loss = F.cross_entropy(logits.view(-1, logits.shape[-1]), targets.reshape(-1))
