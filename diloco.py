@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from data import data_loader
 from dataclasses import dataclass, field, asdict
-from model import Transformer, Config, linear_cross_entropy, parse_args, create_config_from_args
+from model import Transformer, Config, linear_cross_entropy, create_config_from_args
 from contextlib import nullcontext
 # NEW! for ddp
 import torch.distributed as dist
@@ -52,19 +52,10 @@ def train_ddp(config: Config | None = None):
                 targets.reshape(-1).to(device_id)
             )
         losses.append(loss.item())
-        context = (
-            ddp_model.no_sync()
-            if steps_so_far % config.accumulation_steps != config.accumulation_steps - 1 else
-            nullcontext()
-        )
-        with context:
-            scaler.scale(loss).backward()
-
-        if steps_so_far % config.accumulation_steps == config.accumulation_steps - 1:
-            scaler.step(optimizer)
-            scaler.update()
-            optimizer.zero_grad()
-
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+        optimizer.zero_grad()
         scheduler.step()
 
         steps_so_far += 1
@@ -79,6 +70,22 @@ def train_ddp(config: Config | None = None):
             for loss in losses:
                 f.write(f"{loss:.4f}\n")
     dist.destroy_process_group()
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train a simple Transformer language model")
+
+    # Add arguments for each field in Config
+    config_fields = {field.name: field.type for field in Config.__dataclass_fields__.values()}
+
+    for name, field_type in config_fields.items():
+        parser.add_argument(
+            f"--{name}",
+            type=field_type,
+            help=f"Override the default value for {name}"
+        )
+
+    return parser.parse_args()
 
 if __name__ == "__main__":
     args = parse_args()

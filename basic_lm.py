@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from data import data_loader
 from dataclasses import dataclass, field, asdict
-from model import Transformer, Config, linear_cross_entropy, create_config_from_args
+from model import Transformer, Config, linear_cross_entropy, parse_args, create_config_from_args
 
 def train(config: Config | None = None):
     if config is None:
@@ -38,9 +38,10 @@ def train(config: Config | None = None):
                         targets.reshape(-1).to(device)
                     )
                 scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
-                optimizer.zero_grad()
+                if steps_so_far % config.accumulation_steps == config.accumulation_steps - 1:
+                    scaler.step(optimizer)
+                    scaler.update()
+                    optimizer.zero_grad()
                 scheduler.step()
                 pbar.set_description(f"loss: {loss.item():.1f}, lr: {scheduler.get_last_lr()[0]:.1e}")
                 f.write(f"{loss.item():.4f}\n")

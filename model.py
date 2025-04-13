@@ -76,10 +76,26 @@ class Config:
     num_heads: int = 6
     num_layers: int = 6
     batch_size: int = 32
+    accumulation_steps: int = 4
     seq_len: int = 128
     learning_rate: float = 1e-4
     total_steps: int = 1_000
     warmup_steps: int = 50
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train a simple Transformer language model")
+
+    # Add arguments for each field in Config
+    config_fields = {field.name: field.type for field in Config.__dataclass_fields__.values()}
+
+    for name, field_type in config_fields.items():
+        parser.add_argument(
+            f"--{name}",
+            type=field_type,
+            help=f"Override the default value for {name}"
+        )
+
+    return parser.parse_args()
 
 def create_config_from_args(args):
     # Start with default config
