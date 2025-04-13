@@ -25,7 +25,8 @@ def train(config: Config | None = None):
         optimizer, lambda step: step / config.warmup_steps if step < config.warmup_steps else (config.total_steps - step) / (config.total_steps - config.warmup_steps)
     )
     scaler = torch.amp.grad_scaler.GradScaler()
-    print("training model with", sum(p.numel() for p in model.parameters()), "parameters")
+    m_params = sum(p.numel() for p in model.parameters()) / 1e6
+    print(f"training model with {m_params:.2f}M parameters")
     steps_so_far = 0
     with open(f"runs/{timestamp}.txt", "w") as f:
         with tqdm(total=config.total_steps) as pbar:
