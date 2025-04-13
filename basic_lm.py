@@ -108,7 +108,7 @@ def train(config: Config | None = None):
                 loss = linear_cross_entropy(
                     embs.view(-1, embs.shape[-1]),
                     model.classifier,
-                    targets.view(-1).to(device)
+                    targets.reshape(-1).to(device)
                 )
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
