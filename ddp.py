@@ -40,6 +40,7 @@ def train_ddp(config: Config | None = None):
     )
     scaler = torch.amp.grad_scaler.GradScaler()
     print("training model with", sum(p.numel() for p in model.parameters()), "parameters")
+    losses = []
     steps_so_far = 0
     pbar = tqdm(total=config.total_steps) if device_id == 0 else None
     for inputs, targets in data_loader(config.batch_size // world_size, config.seq_len, shard=device_id):
@@ -50,14 +51,13 @@ def train_ddp(config: Config | None = None):
                 ddp_model.module.classifier,
                 targets.reshape(-1).to(device_id)
             )
+        losses.append(loss.item())
         scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad()
         scheduler.step()
-        if device_id == 0:
-            with open(f"runs/{timestamp}.txt", "a") as f:
-                f.write(f"{loss.item():.4f}\n")
+
         steps_so_far += 1
         if pbar:
             pbar.set_description(f"loss: {loss.item():.1f}, lr: {scheduler.get_last_lr()[0]:.1e}")
@@ -65,6 +65,10 @@ def train_ddp(config: Config | None = None):
         if steps_so_far >= config.total_steps:
             break
 
+    if device_id == 0:
+        with open(f"runs/{timestamp}.txt", "w") as f:
+            for loss in losses:
+                f.write(f"{loss:.4f}\n")
     dist.destroy_process_group()
 
 
