@@ -15,19 +15,20 @@ def generate_data():
         for text in texts:
             file.write(text.replace('\n', ' ') + '\n')
 
-def tokenize_all():
+def tokenize_all(num_shards: int = 1):
     all_tokens = []
     with open('data.txt', 'r') as file:
         for line in tqdm(file, total=226_000, desc="Processing lines"):
             tokens = encoding.encode(line.strip())
             all_tokens.extend(tokens)
+    print("Total tokens:", len(all_tokens))
+    tokens_per_shard = len(all_tokens) // num_shards
+    shards = [all_tokens[i:i+tokens_per_shard] for i in range(0, len(all_tokens), tokens_per_shard)]
+    for i, shard in enumerate(shards):
+        np.array(shard, dtype='int32').tofile(f'final_data_{i}.bin')
 
-    final_array = np.array(all_tokens, dtype='int32')
-    print("Total tokens:", len(final_array))
-    final_array.tofile('final_data.bin')
-
-def data_loader(batch_size, seq_len):
-    data = torch.from_numpy(np.fromfile('final_data.bin', dtype='int32')).long()
+def data_loader(batch_size, seq_len, shard: int = 0):
+    data = torch.from_numpy(np.fromfile(f'final_data_{shard}.bin', dtype='int32')).long()
     seq_len_1p = seq_len + 1
     num_tokens = len(data)
     print("Total tokens:", num_tokens)
