@@ -8,3 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Large data files
+data.txt
+final_data.bin
