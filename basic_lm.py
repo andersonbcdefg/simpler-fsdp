@@ -95,11 +95,9 @@ def train(config: Config | None = None):
     steps_so_far = 0
     with open(f"runs/{timestamp}.txt", "w") as f:
         with tqdm(total=config.total_steps) as pbar:
-            for batch in data_loader(config.batch_size * (config.seq_len + 1)):
-                tokens = torch.from_numpy(batch).view(config.batch_size, config.seq_len + 1).long().to(device)
-                logits = model(tokens[:, :-1])
-                targets = tokens[:, 1:]
-                loss = F.cross_entropy(logits.view(-1, logits.shape[-1]), targets.reshape(-1))
+            for inputs, targets in data_loader(config.batch_size, config.seq_len):
+                logits = model(torch.from_numpy(inputs))
+                loss = F.cross_entropy(logits.view(-1, logits.shape[-1]), torch.from_numpy(targets).reshape(-1))
                 loss.backward()
                 optimizer.step()
                 optimizer.zero_grad()
@@ -114,29 +112,29 @@ def train(config: Config | None = None):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train a simple Transformer language model")
-    
+
     # Add arguments for each field in Config
     config_fields = {field.name: field.type for field in Config.__dataclass_fields__.values()}
-    
+
     for name, field_type in config_fields.items():
         parser.add_argument(
             f"--{name}",
             type=field_type,
             help=f"Override the default value for {name}"
         )
-    
+
     return parser.parse_args()
 
 def create_config_from_args(args):
     # Start with default config
     config = Config()
-    
+
     # Override with args if provided
     args_dict = vars(args)
     for key, value in args_dict.items():
         if value is not None:
             setattr(config, key, value)
-    
+
     return config
 
 if __name__ == "__main__":
