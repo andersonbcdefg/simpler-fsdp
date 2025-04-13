@@ -79,7 +79,7 @@ class Config:
 def train(config: Config | None = None):
     if config is None:
         config = Config()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     timestamp = time.time()
     model = Transformer(
         config.vocab_size,
@@ -91,15 +91,18 @@ def train(config: Config | None = None):
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer, lambda step: step / config.warmup_steps if step < config.warmup_steps else (config.total_steps - step) / (config.total_steps - config.warmup_steps)
     )
+    scaler = torch.amp.grad_scaler.GradScaler()
     print("training model with", sum(p.numel() for p in model.parameters()), "parameters")
     steps_so_far = 0
     with open(f"runs/{timestamp}.txt", "w") as f:
         with tqdm(total=config.total_steps) as pbar:
             for inputs, targets in data_loader(config.batch_size, config.seq_len):
-                logits = model(inputs.to(device))
+                with torch.autocast(device_type=device, enabled=device=="cuda"):
+                    logits = model(inputs.to(device))
                 loss = F.cross_entropy(logits.view(-1, logits.shape[-1]), targets.reshape(-1).to(device))
-                loss.backward()
-                optimizer.step()
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
                 optimizer.zero_grad()
                 scheduler.step()
                 pbar.set_description(f"loss: {loss.item():.1f}, lr: {scheduler.get_last_lr()[0]:.1e}")
