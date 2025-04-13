@@ -64,8 +64,8 @@ def data_loader_fast(batch_size, seq_len, device_id: int = 0, buffer_size: int =
         buffer.append(read_seq())
 
     while True:
-        inputs = torch.empty((batch_size, seq_len), dtype=torch.long, device=device_id).pin_memory()
-        targets = torch.empty((batch_size, seq_len), dtype=torch.long, device=device_id).pin_memory()
+        inputs = torch.empty((batch_size, seq_len), dtype=torch.long).pin_memory()
+        targets = torch.empty((batch_size, seq_len), dtype=torch.long).pin_memory()
 
         for i in range(batch_size):
             # Pop a random item for training
