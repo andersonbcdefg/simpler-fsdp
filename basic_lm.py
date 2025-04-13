@@ -62,7 +62,12 @@ class Transformer(nn.Module):
         x = self.w_embs(x)
         for block in self.blocks:
             x = block(x)
-        return self.classifier(x)
+        return x
+
+@torch.compile
+def linear_cross_entropy(embs, classifier, targets):
+    logits = classifier(embs)
+    return F.cross_entropy(logits, targets)
 
 @dataclass
 class Config:
@@ -87,7 +92,7 @@ def train(config: Config | None = None):
         config.num_heads,
         config.num_layers
     ).to(device)
-    model.forward = torch.compile(model.forward)
+    # model.forward = torch.compile(model.forward)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer, lambda step: step / config.warmup_steps if step < config.warmup_steps else (config.total_steps - step) / (config.total_steps - config.warmup_steps)
@@ -99,10 +104,11 @@ def train(config: Config | None = None):
         with tqdm(total=config.total_steps) as pbar:
             for inputs, targets in data_loader(config.batch_size, config.seq_len):
                 with torch.autocast(device_type=device, enabled=device=="cuda"):
-                    logits = model(inputs.to(device))
-                loss = F.cross_entropy(
-                    logits.view(-1, logits.shape[-1]),
-                    targets.reshape(-1).to(device)
+                    embs = model(inputs.to(device))
+                loss = linear_cross_entropy(
+                    embs.view(-1, embs.shape[-1]),
+                    model.classifier,
+                    targets.view(-1).to(device)
                 )
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
