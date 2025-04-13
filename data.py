@@ -4,6 +4,13 @@ import tiktoken
 import datasets
 encoding = tiktoken.encoding_for_model("gpt-4")
 
+def generate_data():
+    ds = datasets.load_dataset('pszemraj/simple_wikipedia', split='train')
+    texts = [x['text'] for x in ds] # pyright: ignore
+    with open('data.txt', 'w') as file:
+        for text in texts:
+            file.write(text.replace('\n', ' ') + '\n')
+
 def tokenize_all():
     all_tokens = []
     with open('data.txt', 'r') as file:
@@ -21,3 +28,7 @@ def data_loader(batch_size_in_tokens: int):
     while True:
         for i in range(0, num_tokens - batch_size_in_tokens, batch_size_in_tokens):
             yield data[i:i+batch_size_in_tokens]
+
+if __name__ == "__main__":
+    generate_data()
+    tokenize_all()
