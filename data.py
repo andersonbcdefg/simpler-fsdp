@@ -1,3 +1,4 @@
+import torch
 from tqdm.auto import tqdm
 import numpy as np
 import tiktoken
@@ -26,7 +27,7 @@ def tokenize_all():
     final_array.tofile('final_data.bin')
 
 def data_loader(batch_size, seq_len):
-    data = np.fromfile('final_data.bin', dtype='int32')
+    data = torch.from_numpy(np.fromfile('final_data.bin', dtype='int32')).long()
     seq_len_1p = seq_len + 1
     num_tokens = len(data)
     print("Total tokens:", num_tokens)
@@ -35,9 +36,9 @@ def data_loader(batch_size, seq_len):
     num_seqs = (num_tokens // seq_len_1p)
     shaped_tokens = data[:num_seqs * seq_len_1p].reshape(-1, seq_len_1p)
     while True:
-        np.random.shuffle(shaped_tokens)
+        rand_idxs = torch.randperm(num_seqs)
         for i in range(0, num_seqs, batch_size):
-            batch = shaped_tokens[i:i+batch_size]
+            batch = shaped_tokens[rand_idxs[i:i+batch_size], :]
             yield batch[:, :-1], batch[:, 1:]
 
 if __name__ == "__main__":
