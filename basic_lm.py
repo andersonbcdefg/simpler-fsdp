@@ -1,9 +1,11 @@
 import time
+import argparse
 from tqdm.auto import tqdm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from data import data_loader
+from dataclasses import dataclass, field, asdict
 
 class MLP(nn.Module):
     def __init__(self, model_dim, hidden_dim):
@@ -62,26 +64,39 @@ class Transformer(nn.Module):
             x = block(x)
         return self.classifier(x)
 
+@dataclass
+class Config:
+    vocab_size: int = 100_352
+    model_dim: int = 384
+    num_heads: int = 6
+    num_layers: int = 6
+    batch_size: int = 32
+    seq_len: int = 128
+    learning_rate: float = 1e-4
+    total_steps: int = 1_000
+    warmup_steps: int = 50
 
-BATCH_SIZE = 16
-SEQ_LEN = 128
-TOTAL_STEPS = 1000
-WARMUP_STEPS = 50
-
-def train():
+def train(config: Config | None = None):
+    if config is None:
+        config = Config()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     timestamp = time.time()
-    model = Transformer(100_352, 128, 4, 3).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+    model = Transformer(
+        config.vocab_size,
+        config.model_dim,
+        config.num_heads,
+        config.num_layers
+    ).to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
     scheduler = torch.optim.lr_scheduler.LambdaLR(
-        optimizer, lambda step: step / WARMUP_STEPS if step < WARMUP_STEPS else (TOTAL_STEPS - step) / (TOTAL_STEPS - WARMUP_STEPS)
+        optimizer, lambda step: step / config.warmup_steps if step < config.warmup_steps else (config.total_steps - step) / (config.total_steps - config.warmup_steps)
     )
     print("training model with", sum(p.numel() for p in model.parameters()), "parameters")
     steps_so_far = 0
     with open(f"runs/{timestamp}.txt", "w") as f:
-        with tqdm(total=TOTAL_STEPS) as pbar:
-            for batch in data_loader(BATCH_SIZE * (SEQ_LEN + 1)):
-                tokens = torch.from_numpy(batch).view(BATCH_SIZE, SEQ_LEN + 1).long().to(device)
+        with tqdm(total=config.total_steps) as pbar:
+            for batch in data_loader(config.batch_size * (config.seq_len + 1)):
+                tokens = torch.from_numpy(batch).view(config.batch_size, config.seq_len + 1).long().to(device)
                 logits = model(tokens[:, :-1])
                 targets = tokens[:, 1:]
                 loss = F.cross_entropy(logits.view(-1, logits.shape[-1]), targets.reshape(-1))
@@ -93,8 +108,38 @@ def train():
                 f.write(f"{loss.item():.4f}\n")
                 steps_so_far += 1
                 pbar.update(1)
-                if steps_so_far >= TOTAL_STEPS:
+                if steps_so_far >= config.total_steps:
                     break
 
 
-train()
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train a simple Transformer language model")
+    
+    # Add arguments for each field in Config
+    config_fields = {field.name: field.type for field in Config.__dataclass_fields__.values()}
+    
+    for name, field_type in config_fields.items():
+        parser.add_argument(
+            f"--{name}",
+            type=field_type,
+            help=f"Override the default value for {name}"
+        )
+    
+    return parser.parse_args()
+
+def create_config_from_args(args):
+    # Start with default config
+    config = Config()
+    
+    # Override with args if provided
+    args_dict = vars(args)
+    for key, value in args_dict.items():
+        if value is not None:
+            setattr(config, key, value)
+    
+    return config
+
+if __name__ == "__main__":
+    args = parse_args()
+    config = create_config_from_args(args)
+    train(config)
