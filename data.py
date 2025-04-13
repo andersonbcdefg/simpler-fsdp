@@ -43,5 +43,7 @@ def data_loader(batch_size, seq_len, shard: int = 0):
             yield batch[:, :-1], batch[:, 1:]
 
 if __name__ == "__main__":
+    import sys
+    num_shards = int(sys.argv[1])
     generate_data()
-    tokenize_all()
+    tokenize_all(num_shards)
