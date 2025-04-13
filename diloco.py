@@ -47,7 +47,12 @@ def train_diloco(config: Config | None = None):
     for param in model.parameters():
         dist.broadcast(param.data, src=0)
 
-    outer_optimizer = torch.optim.SGD(model.parameters(), lr=OUTER_LR)
+    outer_optimizer = torch.optim.SGD(
+        model.parameters(),
+        lr=OUTER_LR,
+        momentum=0.9,
+        nesterov=True
+    )
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer,
