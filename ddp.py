@@ -50,12 +50,7 @@ def train_ddp(config: Config | None = None):
         device_id=device_id
     ):
         with torch.autocast(device_type="cuda"):
-            embs = ddp_model(inputs.to(device_id))
-            loss = linear_cross_entropy(
-                embs.view(-1, embs.shape[-1]),
-                ddp_model.module.classifier.weight,
-                targets.reshape(-1).to(device_id)
-            )
+            loss = ddp_model(inputs.to(device_id), targets)
         losses.append(loss.item())
         context = (
             ddp_model.no_sync()

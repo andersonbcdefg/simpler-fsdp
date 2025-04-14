@@ -75,12 +75,7 @@ def train_diloco(config: Config | None = None):
         device_id=device_id
     ):
         with torch.autocast(device_type="cuda"):
-            embs = model(inputs.to(device_id))
-            loss = linear_cross_entropy(
-                embs.view(-1, embs.shape[-1]),
-                model.classifier.weight,
-                targets.reshape(-1).to(device_id)
-            )
+            loss = model(inputs.to(device_id), targets)
         losses.append(loss.item())
         scaler.scale(loss).backward()
 
