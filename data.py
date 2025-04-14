@@ -5,6 +5,7 @@ import tiktoken
 import datasets
 import random
 from collections import deque
+from torch.utils.data import Dataset, DataLoader
 encoding = tiktoken.encoding_for_model("gpt-4")
 
 def generate_data():
@@ -28,53 +29,42 @@ def tokenize_all(num_shards: int = 1):
     for i, shard in enumerate(shards):
         np.array(shard, dtype='int32').tofile(f'final_data_{i}.bin')
 
-def data_loader(batch_size, seq_len, device_id: int = 0):
-    data = torch.from_numpy(np.fromfile(f'final_data_{device_id}.bin', dtype='int32')).long()
-    seq_len_1p = seq_len + 1
-    num_tokens = len(data)
-    print("Total tokens:", num_tokens)
-    print("Steps per epoch:", num_tokens // (batch_size * seq_len_1p))
-    # first reshape into (?, seq_len_1p)
-    num_seqs = (num_tokens // seq_len_1p)
-    shaped_tokens = data[:num_seqs * seq_len_1p].reshape(-1, seq_len_1p)
+class TokenFileDataset(Dataset):
+    def __init__(self, seq_len, device_id):
+        self.seq_len = seq_len
+        self.device_id = device_id
+        self.filename = f'final_data_{device_id}.bin'
+        self.tokens = np.memmap(self.filename, dtype=np.uint32, mode="r")
+        self.num_tokens = len(self.tokens)
+        self.num_seqs = (self.num_tokens - 1) // self.seq_len # need 1 extra token at the end to predict
+
+    def __len__(self):
+        return self.num_seqs
+
+    def __getitem__(self, idx):
+        start = idx * self.seq_len
+        end = start + self.seq_len + 1 # return seq_len + 1 tokens for targets
+        return torch.from_numpy(self.tokens[start:end])
+
+def data_loader_fast(
+    batch_size,
+    seq_len,
+    device_id: int = 0,
+    buffer_size: int = 1024
+):
+    dataset = TokenFileDataset(seq_len, device_id)
+    dataloader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        pin_memory=True,
+        num_workers=0,
+        drop_last=True
+    )
     while True:
-        rand_idxs = torch.randperm(num_seqs)
-        for i in range(0, num_seqs, batch_size):
-            batch = shaped_tokens[rand_idxs[i:i+batch_size], :]
-            yield batch[:, :-1], batch[:, 1:]
-
-def data_loader_fast(batch_size, seq_len, device_id: int = 0, buffer_size: int = 1024):
-    filename=f'final_data_{device_id}.bin'
-    tokens = np.memmap(filename, dtype=np.uint32, mode="r")
-    total_len = len(tokens)
-    stride = seq_len + 1
-    pos = 0
-
-    buffer = deque()
-    def read_seq():
-        nonlocal pos
-        if pos + stride >= total_len:
-            pos = 0
-        chunk = tokens[pos : pos + stride].copy()
-        pos += stride
-        return torch.from_numpy(chunk)
-
-    # Fill initial buffer
-    for _ in range(buffer_size):
-        buffer.append(read_seq())
-
-    while True:
-        inputs = torch.empty((batch_size, seq_len), dtype=torch.long).pin_memory()
-        targets = torch.empty((batch_size, seq_len), dtype=torch.long).pin_memory()
-
-        for i in range(batch_size):
-            # Pop a random item for training
-            j = random.randint(0, len(buffer) - 1)
-            seq = buffer[j]
-            inputs[i] = seq[:-1]
-            targets[i] = seq[1:]
-            buffer[j] = read_seq()  # replace with new data
-        yield inputs.to(device_id, non_blocking=True), targets.to(device_id, non_blocking=True)
+        for chunk in dataloader:
+            inputs, targets = chunk[:, :-1], chunk[:, 1:]
+            yield inputs.to(device_id, non_blocking=True), targets.to(device_id, non_blocking=True)
 
 if __name__ == "__main__":
     import sys
