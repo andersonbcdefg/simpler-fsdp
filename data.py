@@ -1,3 +1,4 @@
+import os
 import torch
 from tqdm.auto import tqdm
 import numpy as np
@@ -34,6 +35,27 @@ class TokenFileDataset(Dataset):
         self.seq_len = seq_len
         self.device_id = device_id
         self.filename = f'final_data_{device_id}.bin'
+
+        # Add debugging information
+        print(f"Process {os.getpid()} on rank {device_id} is attempting to open {self.filename}")
+
+        # Check if file exists
+        if not os.path.exists(self.filename):
+            raise FileNotFoundError(f"File {self.filename} not found for rank {device_id}")
+
+        # Get file size
+        file_size = os.path.getsize(self.filename)
+        print(f"File {self.filename} exists with size {file_size / (1024*1024):.2f} MB")
+
+        try:
+            # Try to open the file
+            self.tokens = np.memmap(self.filename, dtype=np.uint32, mode="r")
+            self.num_tokens = len(self.tokens)
+            self.num_seqs = (self.num_tokens - 1) // self.seq_len
+            print(f"Successfully created TokenFileDataset on rank {device_id} with {self.num_tokens} tokens and {self.num_seqs} sequences")
+        except Exception as e:
+            print(f"Error opening {self.filename} on rank {device_id}: {str(e)}")
+            raise
         self.tokens = np.memmap(self.filename, dtype=np.uint32, mode="r")
         self.num_tokens = len(self.tokens)
         self.num_seqs = (self.num_tokens - 1) // self.seq_len # need 1 extra token at the end to predict
