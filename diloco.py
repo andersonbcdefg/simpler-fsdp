@@ -30,7 +30,7 @@ def train_diloco(config: Config | None = None):
     rank = dist.get_rank()
     device_id = rank % torch.cuda.device_count()
     world_size = dist.get_world_size()
-    print(f"Start running basic DDP example on rank {rank}, device_id {device_id}.")
+    print(f"Start running DiLoCo example on rank {rank}, device_id {device_id}.")
 
     if config is None:
         config = Config()
@@ -60,7 +60,8 @@ def train_diloco(config: Config | None = None):
     )
     scaler = torch.amp.grad_scaler.GradScaler()
     m_params = sum(p.numel() for p in model.parameters()) / 1e6
-    print(f"training model with {m_params:.2f}M parameters")
+    if device_id == 0:
+        print(f"training model with {m_params:.2f}M parameters")
 
     # these are stored on CPU
     global_params = get_global_params(outer_optimizer)

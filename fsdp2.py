@@ -25,7 +25,7 @@ def train_fsdp(config: Config | None = None):
     rank = dist.get_rank()
     device_id = rank % torch.cuda.device_count()
     world_size = dist.get_world_size()
-    print(f"Start running basic DDP example on rank {rank}, device_id {device_id}.")
+    print(f"Start running FSDP example on rank {rank}, device_id {device_id}.")
 
     if config is None:
         config = Config()
@@ -56,7 +56,8 @@ def train_fsdp(config: Config | None = None):
     )
     scaler = torch.amp.grad_scaler.GradScaler()
     m_params = sum(p.numel() for p in model.parameters()) / 1e6
-    print(f"training model with {m_params:.2f}M parameters")
+    if device_id == 0:
+        print(f"training model with {m_params:.2f}M parameters")
     losses = []
     steps_so_far = 0
     pbar = tqdm(total=config.total_steps) if device_id == 0 else None

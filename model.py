@@ -6,12 +6,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 from data import data_loader
 from dataclasses import dataclass, field, asdict
+try:
+    from liger_kernel.transformers.functional import liger_fused_linear_cross_entropy # pyright: ignore
+    compiled_cross_entropy = None
+except ImportError:
+    liger_fused_linear_cross_entropy = None
+    from loss import compiled_cross_entropy
 
 class MLP(nn.Module):
     def __init__(self, model_dim, hidden_dim):
         super(MLP, self).__init__()
-        self.fc1 = nn.Linear(model_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, model_dim)
+        self.fc1 = nn.Linear(model_dim, hidden_dim, bias=False)
+        self.fc2 = nn.Linear(hidden_dim, model_dim, bias=False)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
@@ -23,8 +29,8 @@ class Attention(nn.Module):
         super(Attention, self).__init__()
         self.head_dim = model_dim // num_heads
         self.num_heads = num_heads
-        self.qkv = nn.Linear(model_dim, 3 * model_dim)
-        self.out_proj = nn.Linear(model_dim, model_dim)
+        self.qkv = nn.Linear(model_dim, 3 * model_dim, bias=False)
+        self.out_proj = nn.Linear(model_dim, model_dim, bias=False)
 
     def forward(self, x):
         B, L, D = x.shape
@@ -56,7 +62,7 @@ class Transformer(nn.Module):
         super(Transformer, self).__init__()
         self.w_embs = nn.Embedding(vocab_size, model_dim)
         self.blocks = nn.ModuleList([Block(model_dim, num_heads) for _ in range(num_layers)])
-        self.classifier = nn.Linear(model_dim, vocab_size)
+        self.classifier = nn.Linear(model_dim, vocab_size, bias=False)
 
     def forward(self, x):
         x = self.w_embs(x)
@@ -64,10 +70,11 @@ class Transformer(nn.Module):
             x = block(x)
         return x
 
-@torch.compile
 def linear_cross_entropy(embs, classifier, targets):
-    logits = classifier(embs)
-    return F.cross_entropy(logits, targets)
+    if liger_fused_linear_cross_entropy is not None:
+        return liger_fused_linear_cross_entropy(embs, classifier, targets)
+    else:
+        return compiled_cross_entropy(embs, classifier, targets) # pyright: ignore
 
 @dataclass
 class Config:
