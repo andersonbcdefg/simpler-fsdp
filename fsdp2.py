@@ -70,7 +70,7 @@ def train_fsdp(config: Config | None = None):
             embs = model(inputs.to(device_id))
             loss = linear_cross_entropy(
                 embs.view(-1, embs.shape[-1]),
-                model.classifier,
+                model.classifier.weight,
                 targets.reshape(-1).to(device_id)
             )
         losses.append(loss.item())
