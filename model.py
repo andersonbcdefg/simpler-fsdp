@@ -60,11 +60,14 @@ class Transformer(nn.Module):
         self.blocks = nn.ModuleList([Block(model_dim, num_heads) for _ in range(num_layers)])
         self.classifier = nn.Linear(model_dim, vocab_size, bias=False)
 
-    def forward(self, x):
+    def forward(self, x, targets = None):
         x = self.w_embs(x)
         for block in self.blocks:
             x = block(x)
-        return x
+        if targets is not None:
+            return linear_cross_entropy(x.half(), self.classifier.weight, targets)
+        else:
+            return x
 
 @dataclass
 class Config:

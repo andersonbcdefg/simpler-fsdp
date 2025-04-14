@@ -32,12 +32,7 @@ def train(config: Config | None = None):
         with tqdm(total=config.total_steps) as pbar:
             for inputs, targets in data_loader_fast(config.batch_size, config.seq_len):
                 with torch.autocast(device_type=device, enabled=device=="cuda"):
-                    embs = model(inputs.to(device))
-                    loss = linear_cross_entropy(
-                        embs.view(-1, embs.shape[-1]),
-                        model.classifier.weight,
-                        targets.reshape(-1).to(device)
-                    )
+                    loss = model(inputs.to(device), targets.to(device))
                 scaler.scale(loss).backward()
                 if steps_so_far % config.accumulation_steps == config.accumulation_steps - 1:
                     scaler.step(optimizer)
