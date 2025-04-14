@@ -62,7 +62,6 @@ def data_loader_fast(
         num_workers=0,
         drop_last=True
     )
-    print(f"starting iteration on device {device_id}")
     while True:
         for chunk in dataloader:
             inputs, targets = chunk[:, :-1], chunk[:, 1:]
