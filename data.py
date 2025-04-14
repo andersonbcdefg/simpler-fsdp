@@ -38,6 +38,7 @@ class TokenFileDataset(Dataset):
         self.num_tokens = len(self.tokens)
         self.num_seqs = (self.num_tokens - 1) // self.seq_len # need 1 extra token at the end to predict
 
+        print(f"created TokenFileDataset with {self.num_tokens} tokens and {self.num_seqs} sequences")
     def __len__(self):
         return self.num_seqs
 
