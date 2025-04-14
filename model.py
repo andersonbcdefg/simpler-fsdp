@@ -65,7 +65,7 @@ class Transformer(nn.Module):
         for block in self.blocks:
             x = block(x)
         if targets is not None:
-            return linear_cross_entropy(x.half(), self.classifier.weight, targets)
+            return linear_cross_entropy(x.half(), self.classifier.weight.half(), targets)
         else:
             return x
 
