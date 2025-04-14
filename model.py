@@ -6,12 +6,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from data import data_loader
 from dataclasses import dataclass, field, asdict
-try:
-    from liger_kernel.transformers.functional import liger_fused_linear_cross_entropy # pyright: ignore
-    compiled_cross_entropy = None
-except ImportError:
-    liger_fused_linear_cross_entropy = None
-    from loss import compiled_cross_entropy
+# try:
+#     from liger_kernel.transformers.functional import liger_fused_linear_cross_entropy # pyright: ignore
+#     compiled_cross_entropy = None
+# except ImportError:
+from loss import compiled_cross_entropy
+liger_fused_linear_cross_entropy = None
+
 
 class MLP(nn.Module):
     def __init__(self, model_dim, hidden_dim):
