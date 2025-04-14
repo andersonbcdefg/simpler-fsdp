@@ -5,7 +5,8 @@ from tqdm.auto import tqdm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from data import data_loader, data_loader_fast
+from data import data_loader_fast
+from logger import Logger
 from dataclasses import dataclass, field, asdict
 from model import Transformer, Config, linear_cross_entropy, parse_args, create_config_from_args
 from contextlib import nullcontext
@@ -41,7 +42,8 @@ def train_ddp(config: Config | None = None):
     scaler = torch.amp.grad_scaler.GradScaler()
     m_params = sum(p.numel() for p in model.parameters()) / 1e6
     print(f"training model with {m_params:.2f}M parameters")
-    losses = []
+
+    logger = Logger("ddp", "runs", enabled=(device_id == 0))
     steps_so_far = 0
     pbar = tqdm(total=config.total_steps) if device_id == 0 else None
     for inputs, targets in data_loader_fast(
@@ -51,7 +53,11 @@ def train_ddp(config: Config | None = None):
     ):
         with torch.autocast(device_type="cuda"):
             loss = ddp_model(inputs.to(device_id), targets)
-        losses.append(loss.item())
+        logger.log({
+            "loss": loss.item(),
+            "lr": scheduler.get_last_lr()[0],
+            "step": steps_so_far
+        })
         context = (
             ddp_model.no_sync()
             if steps_so_far % config.accumulation_steps != config.accumulation_steps - 1 else
@@ -73,11 +79,7 @@ def train_ddp(config: Config | None = None):
             pbar.update(steps_so_far - pbar.n)
         if steps_so_far >= config.total_steps:
             break
-
-    if device_id == 0:
-        with open(f"runs/{timestamp}.txt", "w") as f:
-            for loss in losses:
-                f.write(f"{loss:.4f}\n")
+    logger.close()
     dist.destroy_process_group()
 
 if __name__ == "__main__":

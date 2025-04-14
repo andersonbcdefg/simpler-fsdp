@@ -4,7 +4,8 @@ from tqdm.auto import tqdm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from data import data_loader, data_loader_fast
+from logger import Logger
+from data import data_loader_fast
 from dataclasses import dataclass, field, asdict
 from model import Transformer, Config, linear_cross_entropy, parse_args, create_config_from_args
 
@@ -27,6 +28,7 @@ def train(config: Config | None = None):
     scaler = torch.amp.grad_scaler.GradScaler()
     m_params = sum(p.numel() for p in model.parameters()) / 1e6
     print(f"training model with {m_params:.2f}M parameters")
+    logger = Logger("single_gpu", "runs")
     steps_so_far = 0
     with open(f"runs/{timestamp}.txt", "w") as f:
         with tqdm(total=config.total_steps) as pbar:
@@ -40,11 +42,16 @@ def train(config: Config | None = None):
                     optimizer.zero_grad()
                 scheduler.step()
                 pbar.set_description(f"loss: {loss.item():.1f}, lr: {scheduler.get_last_lr()[0]:.1e}")
-                f.write(f"{loss.item():.4f}\n")
+                logger.log({
+                    "loss": loss.item(),
+                    "lr": scheduler.get_last_lr()[0],
+                    "step": steps_so_far
+                })
                 steps_so_far += 1
                 pbar.update(1)
                 if steps_so_far >= config.total_steps:
                     break
+    logger.close()
 
 
 def parse_args():

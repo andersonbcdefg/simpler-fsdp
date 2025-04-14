@@ -4,10 +4,8 @@ from tqdm.auto import tqdm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from data import data_loader
 from dataclasses import dataclass, field, asdict
 from cut_cross_entropy import linear_cross_entropy # pyright: ignore
-
 
 class MLP(nn.Module):
     def __init__(self, model_dim, hidden_dim):
