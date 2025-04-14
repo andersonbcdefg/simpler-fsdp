@@ -44,7 +44,7 @@ class TokenFileDataset(Dataset):
     def __getitem__(self, idx):
         start = idx * self.seq_len
         end = start + self.seq_len + 1 # return seq_len + 1 tokens for targets
-        return torch.from_numpy(self.tokens[start:end])
+        return torch.from_numpy(self.tokens[start:end]).long()
 
 def data_loader_fast(
     batch_size,
