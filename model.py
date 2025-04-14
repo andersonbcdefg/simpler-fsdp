@@ -71,7 +71,7 @@ class Transformer(nn.Module):
         return x
 
 def linear_cross_entropy(embs, classifier, targets):
-    if liger_fused_linear_cross_entropy is not None:
+    if False: # liger_fused_linear_cross_entropy is not None:
         return liger_fused_linear_cross_entropy(embs, classifier, targets)
     else:
         return compiled_cross_entropy(embs, classifier, targets) # pyright: ignore
