@@ -34,6 +34,8 @@ def train_ddp(config: Config | None = None):
         config.num_layers
     ).to(device_id)
     ddp_model = DDP(model, device_ids=[device_id])
+    print("created ddp model")
+
     # model.forward = torch.compile(model.forward)
     optimizer = torch.optim.AdamW(ddp_model.parameters(), lr=config.learning_rate)
     scheduler = torch.optim.lr_scheduler.LambdaLR(
