@@ -1,5 +1,6 @@
 import time
 import argparse
+from cut_cross_entropy.doc import LinearCrossEntropyImpl
 from tqdm.auto import tqdm
 import torch
 import torch.nn as nn
@@ -50,7 +51,6 @@ class Block(nn.Module):
         mlp_out = self.mlp(normed)
         return x + attn_out + mlp_out
 
-
 class Transformer(nn.Module):
     def __init__(self, vocab_size, model_dim, num_heads, num_layers):
         super(Transformer, self).__init__()
@@ -71,7 +71,7 @@ class Transformer(nn.Module):
                 targets,
                 accum_e_fp32=True,
                 accum_c_fp32=True,
-                impl="cce_kahan"
+                impl=LinearCrossEntropyImpl.CCE_KAHAN_FULL
             )
         else:
             return x
