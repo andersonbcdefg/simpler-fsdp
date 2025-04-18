@@ -90,15 +90,25 @@ class Config:
 def parse_args():
     parser = argparse.ArgumentParser(description="Train a simple Transformer language model")
 
-    # Add arguments for each field in Config
-    config_fields = {field.name: field.type for field in Config.__dataclass_fields__.values()}
+    for name, field_obj in Config.__dataclass_fields__.values():
+        field_type   = field_obj.type
+        default_val  = field_obj.default
 
-    for name, field_type in config_fields.items():
-        parser.add_argument(
-            f"--{name}",
-            type=field_type,
-            help=f"Override the default value for {name}"
-        )
+        if field_type == bool:
+            # --flag / --no-flag form (Python ≥ 3.9)
+            parser.add_argument(
+                f"--{name}",
+                action=argparse.BooleanOptionalAction,
+                default=default_val,
+                help=f"Toggle {name} (default: {default_val})",
+            )
+        else:
+            parser.add_argument(
+                f"--{name}",
+                type=field_type,
+                default=default_val,
+                help=f"Override the default value for {name}",
+            )
 
     return parser.parse_args()
 
