@@ -131,7 +131,7 @@ class Fp8LinearFn(torch.autograd.Function):
 
         return grad_a, grad_b, grad_bias
 
-
+@torch.compile(mode='max-autotune')
 class Fp8Linear(torch.nn.Linear):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         out = Fp8LinearFn.apply(input.flatten(end_dim=-2), self.weight, self.bias)

@@ -9,9 +9,9 @@ from data import data_loader_fast
 from dataclasses import dataclass, field, asdict
 from model import Transformer, Config, linear_cross_entropy, parse_args, create_config_from_args
 from float8_utils import convert_linears_to_fp8
-import torch._inductor.config as inde
-inde.triton.cudagraphs = False
-inde.triton.cudagraph_trees = False       # <- add this
+# import torch._inductor.config as inde
+# inde.triton.cudagraphs = False
+# inde.triton.cudagraph_trees = False       # <- add this
 
 def train(config: Config | None = None):
     if config is None:
@@ -28,7 +28,9 @@ def train(config: Config | None = None):
         # swap every nn.Linear that matches the regex (here: everything)
         model = convert_linears_to_fp8(model, recipe="rowwise", filter=r".*")
         # Torch‑Compile is required for reasonable perf with the fp8 casts
-        model: nn.Module = torch.compile(model, mode="max-autotune") # pyright: ignore
+        # print("graphs:", inde.triton.cudagraphs,
+        #       "trees:", inde.triton.cudagraph_trees)
+        # model: nn.Module = torch.compile(model, mode="max-autotune") # pyright: ignore
     else:
         print("⚠️  FP8 requested but this GPU can’t run it – falling back to BF16.")
     # model.forward = torch.compile(model.forward)
