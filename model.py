@@ -71,6 +71,7 @@ class Transformer(nn.Module):
                 targets,
                 accum_e_fp32=True,
                 accum_c_fp32=True,
+                impl="ccp_kahan"
             )
         else:
             return x
