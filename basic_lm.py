@@ -13,6 +13,7 @@ torch.backends.cuda.matmul.allow_tf32 = True
 def train(config: Config | None = None):
     if config is None:
         config = Config()
+    print("config:", asdict(config))
     device = "cuda" if torch.cuda.is_available() else "cpu"
     dtype = torch.bfloat16 if config.use_bf16 and torch.cuda.is_bf16_supported() else torch.float16
     print("using dtype", dtype, "on device", device)
