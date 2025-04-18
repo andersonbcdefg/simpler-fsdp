@@ -68,7 +68,9 @@ class Transformer(nn.Module):
             return linear_cross_entropy(
                 x.to(dtype),
                 self.classifier.weight.to(dtype),
-                targets
+                targets,
+                accum_e_fp32=True,
+                accum_c_fp32=True,
             )
         else:
             return x
