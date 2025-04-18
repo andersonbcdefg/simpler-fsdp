@@ -8,11 +8,14 @@ from logger import Logger
 from data import data_loader_fast
 from dataclasses import dataclass, field, asdict
 from model import Transformer, Config, linear_cross_entropy, parse_args, create_config_from_args
+torch.backends.cuda.matmul.allow_tf32 = True
 
 def train(config: Config | None = None):
     if config is None:
         config = Config()
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+    scaler_enabled = not torch.cuda.is_bf16_supported()
     timestamp = time.time()
     model = Transformer(
         config.vocab_size,
@@ -25,7 +28,9 @@ def train(config: Config | None = None):
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer, lambda step: step / config.warmup_steps if step < config.warmup_steps else (config.total_steps - step) / (config.total_steps - config.warmup_steps)
     )
-    scaler = torch.amp.grad_scaler.GradScaler()
+    # optimizer.zero_grad()
+    # optimizer.step() # no-op
+    scaler = torch.amp.grad_scaler.GradScaler(enabled=scaler_enabled)
     m_params = sum(p.numel() for p in model.parameters()) / 1e6
     print(f"training model with {m_params:.2f}M parameters")
     logger = Logger("single_gpu", "runs")
@@ -33,7 +38,11 @@ def train(config: Config | None = None):
     with open(f"runs/{timestamp}.txt", "w") as f:
         with tqdm(total=config.total_steps) as pbar:
             for inputs, targets in data_loader_fast(config.batch_size, config.seq_len):
-                with torch.autocast(device_type=device, enabled=device=="cuda"):
+                with torch.autocast(
+                    device_type=device,
+                    enabled=(device=="cuda"),
+                    dtype=dtype
+                ):
                     loss = model(inputs.to(device), targets.to(device))
                 scaler.scale(loss).backward()
                 if steps_so_far % config.accumulation_steps == config.accumulation_steps - 1:
