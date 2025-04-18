@@ -59,11 +59,12 @@ class Transformer(nn.Module):
         self.classifier = nn.Linear(model_dim, vocab_size, bias=False)
 
     def forward(self, x, targets = None):
+        dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
         x = self.w_embs(x)
         for block in self.blocks:
             x = block(x)
         if targets is not None:
-            return linear_cross_entropy(x.half(), self.classifier.weight.half(), targets)
+            return linear_cross_entropy(x.to(dtype), self.classifier.weight.to(dtype), targets)
         else:
             return x
 

@@ -15,6 +15,7 @@ def train(config: Config | None = None):
         config = Config()
     device = "cuda" if torch.cuda.is_available() else "cpu"
     dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+    print("using dtype", dtype, "on device", device)
     scaler_enabled = not torch.cuda.is_bf16_supported()
     timestamp = time.time()
     model = Transformer(
