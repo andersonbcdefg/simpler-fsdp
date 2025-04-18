@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from data import data_loader_fast
 from logger import Logger
 from dataclasses import dataclass, field, asdict
-from model import Transformer, Config, linear_cross_entropy, parse_args, create_config_from_args
+from model import Transformer, Config, linear_cross_entropy, parse_config
 from contextlib import nullcontext
 # NEW! for ddp
 import torch.distributed as dist
@@ -85,6 +85,5 @@ def train_ddp(config: Config | None = None):
     dist.destroy_process_group()
 
 if __name__ == "__main__":
-    args = parse_args()
-    config = create_config_from_args(args)
+    config = parse_config()
     train_ddp(config)

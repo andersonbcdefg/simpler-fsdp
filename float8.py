@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from logger import Logger
 from data import data_loader_fast
 from dataclasses import dataclass, field, asdict
-from model import Transformer, Config, linear_cross_entropy, parse_args, create_config_from_args
+from model import Transformer, Config, linear_cross_entropy, parse_config
 from float8_utils import convert_linears_to_fp8
 # import torch._inductor.config as inde
 # inde.triton.cudagraphs = False
@@ -90,6 +90,5 @@ def parse_args():
     return parser.parse_args()
 
 if __name__ == "__main__":
-    args = parse_args()
-    config = create_config_from_args(args)
+    config = parse_config()
     train(config)

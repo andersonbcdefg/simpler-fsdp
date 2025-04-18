@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from logger import Logger
 from data import data_loader_fast
 from dataclasses import dataclass, field, asdict
-from model import Transformer, Config, linear_cross_entropy, parse_args, create_config_from_args
+from model import Transformer, Config, linear_cross_entropy, parse_config
 torch.backends.cuda.matmul.allow_tf32 = True
 
 def train(config: Config | None = None):
@@ -81,6 +81,5 @@ def parse_args():
     return parser.parse_args()
 
 if __name__ == "__main__":
-    args = parse_args()
-    config = create_config_from_args(args)
+    config = parse_config()
     train(config)

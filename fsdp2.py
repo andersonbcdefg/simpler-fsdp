@@ -12,8 +12,7 @@ from model import (
     Transformer,
     Config,
     linear_cross_entropy,
-    parse_args,
-    create_config_from_args
+    parse_config
 )
 from contextlib import nullcontext
 # NEW! for fsdp
@@ -93,6 +92,5 @@ def train_fsdp(config: Config | None = None):
     dist.destroy_process_group()
 
 if __name__ == "__main__":
-    args = parse_args()
-    config = create_config_from_args(args)
+    config = parse_config()
     train_fsdp(config)

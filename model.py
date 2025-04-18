@@ -87,39 +87,24 @@ class Config:
     warmup_steps: int = 50
     use_bf16: bool = True
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Train a simple Transformer language model")
+def parse_config() -> Config:
+    p = argparse.ArgumentParser()
 
-    for name, field_obj in Config.__dataclass_fields__.values():
-        field_type   = field_obj.type
-        default_val  = field_obj.default
+    p.add_argument("--vocab-size",       type=int,   default=Config.vocab_size)
+    p.add_argument("--model-dim",        type=int,   default=Config.model_dim)
+    p.add_argument("--num-heads",        type=int,   default=Config.num_heads)
+    p.add_argument("--num-layers",       type=int,   default=Config.num_layers)
+    p.add_argument("--batch-size",       type=int,   default=Config.batch_size)
+    p.add_argument("--accumulation-steps", type=int, default=Config.accumulation_steps)
+    p.add_argument("--seq-len",          type=int,   default=Config.seq_len)
+    p.add_argument("--learning-rate",    type=float, default=Config.learning_rate)
+    p.add_argument("--total-steps",      type=int,   default=Config.total_steps)
+    p.add_argument("--warmup-steps",     type=int,   default=Config.warmup_steps)
 
-        if field_type == bool:
-            # --flag / --no-flag form (Python ≥ 3.9)
-            parser.add_argument(
-                f"--{name}",
-                action=argparse.BooleanOptionalAction,
-                default=default_val,
-                help=f"Toggle {name} (default: {default_val})",
-            )
-        else:
-            parser.add_argument(
-                f"--{name}",
-                type=field_type,
-                default=default_val,
-                help=f"Override the default value for {name}",
-            )
+    bf16 = p.add_mutually_exclusive_group()
+    bf16.add_argument("--use-bf16", dest="use_bf16", action="store_true")
+    bf16.add_argument("--no-bf16",  dest="use_bf16", action="store_false")
+    p.set_defaults(use_bf16=Config.use_bf16)
 
-    return parser.parse_args()
-
-def create_config_from_args(args):
-    # Start with default config
-    config = Config()
-
-    # Override with args if provided
-    args_dict = vars(args)
-    for key, value in args_dict.items():
-        if value is not None:
-            setattr(config, key, value)
-
-    return config
+    args = p.parse_args()
+    return Config(**vars(args))
