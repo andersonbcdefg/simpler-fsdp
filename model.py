@@ -58,13 +58,18 @@ class Transformer(nn.Module):
         self.blocks = nn.ModuleList([Block(model_dim, num_heads) for _ in range(num_layers)])
         self.classifier = nn.Linear(model_dim, vocab_size, bias=False)
 
-    def forward(self, x, targets = None):
-        dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+    def forward(self, x, targets = None, dtype = None):
+        if dtype is None:
+            dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
         x = self.w_embs(x)
         for block in self.blocks:
             x = block(x)
         if targets is not None:
-            return linear_cross_entropy(x.to(dtype), self.classifier.weight.to(dtype), targets)
+            return linear_cross_entropy(
+                x.to(dtype),
+                self.classifier.weight.to(dtype),
+                targets
+            )
         else:
             return x
 
@@ -80,6 +85,7 @@ class Config:
     learning_rate: float = 1e-4
     total_steps: int = 1_000
     warmup_steps: int = 50
+    use_bf16: bool = True
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train a simple Transformer language model")

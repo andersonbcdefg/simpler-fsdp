@@ -14,9 +14,9 @@ def train(config: Config | None = None):
     if config is None:
         config = Config()
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+    dtype = torch.bfloat16 if config.use_bf16 and torch.cuda.is_bf16_supported() else torch.float16
     print("using dtype", dtype, "on device", device)
-    scaler_enabled = not torch.cuda.is_bf16_supported()
+    scaler_enabled = (dtype == torch.float16)
     timestamp = time.time()
     model = Transformer(
         config.vocab_size,
@@ -44,7 +44,7 @@ def train(config: Config | None = None):
                     enabled=(device=="cuda"),
                     dtype=dtype
                 ):
-                    loss = model(inputs.to(device), targets.to(device))
+                    loss = model(inputs.to(device), targets.to(device), dtype)
                 scaler.scale(loss).backward()
                 if steps_so_far % config.accumulation_steps == config.accumulation_steps - 1:
                     scaler.step(optimizer)
