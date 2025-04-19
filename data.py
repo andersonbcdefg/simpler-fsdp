@@ -9,7 +9,79 @@ from collections import deque
 import math
 import glob
 from pathlib import Path
+import pyarrow.parquet as pq
+import pyarrow.dataset as ds
+from tqdm.auto import tqdm
 encoding = tiktoken.encoding_for_model("gpt-4")
+
+def tokenize_parquet_dir(
+    data_dir: str,               # path to directory with .parquet.zst files
+    world_size: int,             # W
+    max_tokens_per_shard: int = 2**22,
+    buf_cap: int = 1 << 20       # flush every 1M tokens
+):
+    big_path = Path("all_tokens.bin")
+    big_path.unlink(missing_ok=True)
+    eot_token = encoding._special_tokens['<|endoftext|>']
+
+    # 0. Stream parquet text fields
+    buffer = []
+    total = 0
+    with open(big_path, "ab") as f:
+        dataset = ds.dataset(data_dir, format="parquet")
+
+        for batch in tqdm(dataset.to_batches(columns=["text"]), desc="Tokenizing"):
+            for text in batch.column("text"):
+                tokens = encoding.encode_ordinary(text.as_py())
+                buffer.extend(tokens)
+                buffer.append(eot_token)
+
+                if len(buffer) >= buf_cap:
+                    np.array(buffer, dtype='int32').tofile(f)
+                    total += len(buffer)
+                    buffer.clear()
+
+        if buffer:
+            np.array(buffer, dtype='int32').tofile(f)
+            total += len(buffer)
+
+    print(f"Total tokens written: {total:,}")
+
+    # 1. Truncate to same # tokens per worker and multiple of 128
+    mod_factor = world_size * 128
+    total_tokens = big_path.stat().st_size // 4
+    usable = total_tokens - (total_tokens % mod_factor)
+    if usable < total_tokens:
+        with open(big_path, "r+b") as f:
+            f.truncate(usable * 4)
+
+    # 2. Determine shard sizes
+    tokens_per_worker = usable // world_size
+    if tokens_per_worker % max_tokens_per_shard == 0:
+        shards_per_worker = tokens_per_worker // max_tokens_per_shard
+        shard_sizes = [max_tokens_per_shard] * shards_per_worker
+    else:
+        shards_per_worker = tokens_per_worker // max_tokens_per_shard + 1
+        shard_sizes = [max_tokens_per_shard] * (shards_per_worker - 1) + [tokens_per_worker % max_tokens_per_shard]
+
+    print(f"→ {usable:,} tokens kept of {total_tokens:,} "
+          f"({shards_per_worker * world_size} shards)")
+
+    # 3. Slice the big file → shard files
+    mmap = np.memmap(big_path, dtype="int32", mode="r")
+    shard_idx = 0
+    start = 0
+    for i in range(shards_per_worker):
+        for j in range(world_size):
+            ntok = shard_sizes[i]
+            end = start + ntok
+            mmap[start:end].tofile(f"final_data_{shard_idx}.bin")
+            shard_idx += 1
+            start = end
+
+    mmap._mmap.close()  # pyright: ignore
+    big_path.unlink()
+
 
 def tokenize_all_streaming(
     world_size: int,             # W
@@ -154,9 +226,21 @@ def data_loader_fast(
 
 if __name__ == "__main__":
     import sys
-    num_shards = int(sys.argv[1])
-    if len(sys.argv) > 2:
-        dataset_name = sys.argv[2]
-        tokenize_all_streaming(num_shards, dataset_name=dataset_name)
+
+    if len(sys.argv) < 2:
+        print("Usage: python script.py <world_size> [--hf <dataset_name>] | [--parquet <dir_path>]")
+        sys.exit(1)
+
+    world_size = int(sys.argv[1])
+
+    if len(sys.argv) == 4 and sys.argv[2] == "--hf":
+        dataset_name = sys.argv[3]
+        tokenize_all_streaming(world_size, dataset_name=dataset_name)
+
+    elif len(sys.argv) == 4 and sys.argv[2] == "--parquet":
+        data_dir = sys.argv[3]
+        tokenize_parquet_dir(data_dir, world_size)
+
     else:
-        tokenize_all_streaming(num_shards)
+        print("Usage: python script.py <world_size> [--hf <dataset_name>] | [--parquet <dir_path>]")
+        sys.exit(1)
