@@ -28,7 +28,11 @@ def tokenize_parquet_dir(
     big_path.unlink(missing_ok=True)
     eot_token = encoding._special_tokens['<|endoftext|>']
 
-    parquet_files = sorted(glob.glob(f"{data_dir}/*.parquet.zst"))
+    parquet_files = [
+        os.path.join(data_dir, f)
+        for f in os.listdir(data_dir)
+        if os.path.getsize(os.path.join(data_dir, f)) > 1024
+    ]
     if not parquet_files:
         raise RuntimeError(f"No .parquet.zst files found in {data_dir}")
 
