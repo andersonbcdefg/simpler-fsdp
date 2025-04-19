@@ -6,7 +6,6 @@ import tiktoken
 import datasets
 import random
 from collections import deque
-from torch.utils.data import Dataset, DataLoader
 encoding = tiktoken.encoding_for_model("gpt-4")
 
 def generate_data():
@@ -30,66 +29,38 @@ def tokenize_all(num_shards: int = 1):
     for i, shard in enumerate(shards):
         np.array(shard, dtype='int32').tofile(f'final_data_{i}.bin')
 
-class TokenFileDataset(Dataset):
-    def __init__(self, seq_len, device_id):
-        self.seq_len = seq_len
-        self.device_id = device_id
-        self.filename = f'final_data_{device_id}.bin'
-
-        # Add debugging information
-        print(f"Process {os.getpid()} on rank {device_id} is attempting to open {self.filename}")
-
-        # Check if file exists
-        if not os.path.exists(self.filename):
-            raise FileNotFoundError(f"File {self.filename} not found for rank {device_id}")
-
-        # Get file size
-        file_size = os.path.getsize(self.filename)
-        print(f"File {self.filename} exists with size {file_size / (1024*1024):.2f} MB")
-
-        try:
-            # Try to open the file
-            self.tokens = np.memmap(self.filename, dtype=np.uint32, mode="r")
-            self.num_tokens = len(self.tokens)
-            self.num_seqs = (self.num_tokens - 1) // self.seq_len
-            print(f"Successfully created TokenFileDataset on rank {device_id} with {self.num_tokens} tokens and {self.num_seqs} sequences")
-        except Exception as e:
-            print(f"Error opening {self.filename} on rank {device_id}: {str(e)}")
-            raise
-        self.tokens = np.memmap(self.filename, dtype=np.uint32, mode="r")
-        self.num_tokens = len(self.tokens)
-        self.num_seqs = (self.num_tokens - 1) // self.seq_len # need 1 extra token at the end to predict
-
-        print(f"created TokenFileDataset with {self.num_tokens} tokens and {self.num_seqs} sequences")
-    def __len__(self):
-        return self.num_seqs
-
-    def __getitem__(self, idx):
-        start = idx * self.seq_len
-        end = start + self.seq_len + 1 # return seq_len + 1 tokens for targets
-        tokens = self.tokens[start:end].astype(np.int64)
-        return torch.from_numpy(tokens)
-
 def data_loader_fast(
-    batch_size,
-    seq_len,
-    device_id: int = 0,
-    buffer_size: int = 1024
+    batch_size: int,
+    seq_len: int,
+    device_id: int,
+    seed: int = 0
 ):
-    dataset = TokenFileDataset(seq_len, device_id)
-    dataloader = DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        pin_memory=True,
-        num_workers=0,
-        drop_last=True
-    )
-    print(f"starting iteration on device {device_id}")
-    while True:
-        for chunk in dataloader:
-            inputs, targets = chunk[:, :-1], chunk[:, 1:]
-            yield inputs.to(device_id, non_blocking=True), targets.to(device_id, non_blocking=True)
+    """Exactly‑once shuffle, pure‑torch implementation."""
+    path   = f"final_data_{device_id}.bin"
+    tokens = torch.from_file(
+        path,
+        dtype=torch.int32,
+        size=os.path.getsize(path) // 4         # bytes → int32 count
+    ).to(torch.int64)                           # easier math
+
+    stride  = seq_len + 1
+    n_seqs  = (tokens.numel() - 1) // seq_len
+    rng     = torch.Generator().manual_seed(seed)
+    arange_ = torch.arange(stride, dtype=torch.int64)
+
+    while True:                                 # epoch loop
+        perm = torch.randperm(n_seqs, generator=rng)           # ~2 MB
+        for s in range(0, n_seqs - batch_size + 1, batch_size):
+            starts = perm[s:s + batch_size] * seq_len          # (B,)
+            idx    = starts[:, None] + arange_                 # (B, stride)
+            batch  = tokens[idx]                               # CPU gather
+
+            buf = torch.empty_like(batch, pin_memory=True)     # staging
+            buf.copy_(batch, non_blocking=True)
+
+            inputs  = buf[:, :-1].to(device_id, non_blocking=True)
+            targets = buf[:, 1:].to(device_id, non_blocking=True)
+            yield inputs, targets
 
 if __name__ == "__main__":
     import sys
