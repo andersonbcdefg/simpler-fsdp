@@ -155,4 +155,8 @@ def data_loader_fast(
 if __name__ == "__main__":
     import sys
     num_shards = int(sys.argv[1])
-    tokenize_all_streaming(num_shards)
+    if len(sys.argv) > 2:
+        dataset_name = sys.argv[2]
+        tokenize_all_streaming(num_shards, dataset_name=dataset_name)
+    else:
+        tokenize_all_streaming(num_shards)
