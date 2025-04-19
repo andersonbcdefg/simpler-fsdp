@@ -40,7 +40,7 @@ def train(config: Config | None = None):
     steps_so_far = 0
     with open(f"runs/{timestamp}.txt", "w") as f:
         with tqdm(total=config.total_steps) as pbar:
-            for inputs, targets in data_loader_fast(config.batch_size, config.seq_len):
+            for inputs, targets in data_loader_fast(config.batch_size, config.seq_len, device_id=0):
                 with torch.autocast(
                     device_type=device,
                     enabled=(device=="cuda"),

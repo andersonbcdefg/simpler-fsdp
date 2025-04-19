@@ -33,6 +33,9 @@ def train(config: Config | None = None):
         # print("graphs:", inde.triton.cudagraphs,
         #       "trees:", inde.triton.cudagraph_trees)
         # model: nn.Module = torch.compile(model, mode="max-autotune") # pyright: ignore
+    elif torch.cuda.get_device_capability() == (8, 9):
+        # swap every nn.Linear that matches the regex (here: everything)
+        model = convert_linears_to_fp8(model, recipe="rowwise", filter=r".*")
     else:
         print("⚠️  FP8 requested but this GPU can’t run it – falling back to BF16.")
     # model.forward = torch.compile(model.forward)
@@ -47,7 +50,7 @@ def train(config: Config | None = None):
     steps_so_far = 0
     with open(f"runs/{timestamp}.txt", "w") as f:
         with tqdm(total=config.total_steps) as pbar:
-            for inputs, targets in data_loader_fast(config.batch_size, config.seq_len):
+            for inputs, targets in data_loader_fast(config.batch_size, config.seq_len, device_id=0):
                 torch.compiler.cudagraph_mark_step_begin()
                 with torch.autocast(
                     device_type=device,
