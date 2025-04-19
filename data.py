@@ -12,29 +12,42 @@ from pathlib import Path
 import pyarrow.parquet as pq
 import pyarrow.dataset as ds
 from tqdm.auto import tqdm
+import concurrent.futures
+import pyarrow.parquet as pq
+import glob
 encoding = tiktoken.encoding_for_model("gpt-4")
 
 def tokenize_parquet_dir(
     data_dir: str,
     world_size: int,
     max_tokens_per_shard: int = 2**22,
-    buf_cap: int = 1 << 20
+    buf_cap: int = 1 << 20,
+    workers: int = os.cpu_count() // 2 # pyright: ignore
 ):
     big_path = Path("all_tokens.bin")
     big_path.unlink(missing_ok=True)
     eot_token = encoding._special_tokens['<|endoftext|>']
 
-    buffer = []
-    total = 0
-    with open(big_path, "ab") as f:
-        dataset = ds.dataset(data_dir, format="parquet")
+    parquet_files = sorted(glob.glob(f"{data_dir}/*.parquet.zst"))
+    if not parquet_files:
+        raise RuntimeError(f"No .parquet.zst files found in {data_dir}")
 
-        for batch in tqdm(dataset.to_batches(columns=["text"]), desc="Tokenizing"):
-            texts = [val.as_py() for val in batch.column("text")]
-            encoded = encoding.encode_ordinary_batch(texts)
-            for tokens in encoded:
-                buffer.extend(tokens)
-                buffer.append(eot_token)
+    def process_file(path):
+        table = pq.ParquetFile(path).read(columns=["text"])
+        texts = table.column("text").to_pylist()
+        encoded = encoding.encode_ordinary_batch(texts)
+        flat = []
+        for tokens in encoded:
+            flat.extend(tokens)
+            flat.append(eot_token)
+        return flat
+
+    total = 0
+    buffer = []
+
+    with open(big_path, "ab") as f, concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+        for result in tqdm(pool.map(process_file, parquet_files), total=len(parquet_files), desc="Tokenizing"):
+            buffer.extend(result)
             if len(buffer) >= buf_cap:
                 np.array(buffer, dtype="int32").tofile(f)
                 total += len(buffer)
@@ -45,6 +58,7 @@ def tokenize_parquet_dir(
             total += len(buffer)
 
     print(f"Total tokens written: {total:,}")
+
 
 
 
