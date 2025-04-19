@@ -91,7 +91,7 @@ def train_diloco(config: Config | None = None):
 
             # decide whether to do diloco sync
             optimizer_steps_so_far = steps_so_far // config.accumulation_steps
-            if optimizer_steps_so_far % SYNC_EVERY == SYNC_EVERY - 1:
+            if optimizer_steps_so_far % SYNC_EVERY == SYNC_EVERY - 1 or steps_so_far == config.total_steps - 1:
                 # do the thing!
                 if device_id == 0:
                     print(f"perform outer step at step {steps_so_far}")
