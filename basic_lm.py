@@ -46,7 +46,7 @@ def train(config: Config | None = None):
                     enabled=(device=="cuda"),
                     dtype=dtype
                 ):
-                    loss = model(inputs.to(device), targets.to(device), dtype)
+                    loss = model(inputs.to(device), targets.to(device))
                 scaler.scale(loss).backward()
                 if steps_so_far % config.accumulation_steps == config.accumulation_steps - 1:
                     scaler.step(optimizer)
