@@ -58,7 +58,7 @@ class Transformer(nn.Module):
             self.dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
         else:
             self.dtype = dtype
-        self.w_embs = nn.Embedding(vocab_size, model_dim).to(self.dtype)
+        self.w_embs = nn.Embedding(vocab_size, model_dim) # .to(self.dtype)
         self.blocks = nn.ModuleList([Block(model_dim, num_heads) for _ in range(num_layers)])
         self.classifier = nn.Linear(model_dim, vocab_size, bias=False) # .to(self.dtype) this broke everything
 
