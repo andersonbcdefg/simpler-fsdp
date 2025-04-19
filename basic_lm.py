@@ -23,7 +23,8 @@ def train(config: Config | None = None):
         config.vocab_size,
         config.model_dim,
         config.num_heads,
-        config.num_layers
+        config.num_layers,
+        dtype=dtype
     ).to(device)
     # model.forward = torch.compile(model.forward)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)

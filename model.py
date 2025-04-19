@@ -52,14 +52,17 @@ class Block(nn.Module):
         return x + attn_out + mlp_out
 
 class Transformer(nn.Module):
-    def __init__(self, vocab_size, model_dim, num_heads, num_layers):
+    def __init__(self, vocab_size, model_dim, num_heads, num_layers, dtype = None):
         super(Transformer, self).__init__()
-        self.dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+        if dtype is None:
+            self.dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+        else:
+            self.dtype = dtype
         self.w_embs = nn.Embedding(vocab_size, model_dim).to(self.dtype)
         self.blocks = nn.ModuleList([Block(model_dim, num_heads) for _ in range(num_layers)])
         self.classifier = nn.Linear(model_dim, vocab_size, bias=False).to(self.dtype)
 
-    def forward(self, x, targets = None, dtype = None):
+    def forward(self, x, targets = None):
         x = self.w_embs(x)
         for block in self.blocks:
             x = block(x)
