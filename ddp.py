@@ -33,6 +33,7 @@ def train_ddp(config: Config | None = None):
         config.num_heads,
         config.num_layers
     ).to(device_id)
+    print("instantiated model")
     ddp_model = DDP(model, device_ids=[device_id])
     print("created ddp model")
 
