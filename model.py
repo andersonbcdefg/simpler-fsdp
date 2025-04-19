@@ -52,7 +52,15 @@ class Block(nn.Module):
         return x + attn_out + mlp_out
 
 class Transformer(nn.Module):
-    def __init__(self, vocab_size, model_dim, num_heads, num_layers, dtype = None):
+    def __init__(
+        self,
+        vocab_size,
+        model_dim,
+        num_heads,
+        num_layers,
+        loss_impl = LinearCrossEntropyImpl.TORCH_COMPILE,
+        dtype = None
+    ):
         super(Transformer, self).__init__()
         if dtype is None:
             self.dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
@@ -61,6 +69,7 @@ class Transformer(nn.Module):
         self.w_embs = nn.Embedding(vocab_size, model_dim) # .to(self.dtype)
         self.blocks = nn.ModuleList([Block(model_dim, num_heads) for _ in range(num_layers)])
         self.classifier = nn.Linear(model_dim, vocab_size, bias=False) # .to(self.dtype) this broke everything
+        self.loss_impl = loss_impl
 
     def forward(self, x, targets = None):
         x = self.w_embs(x)
@@ -70,7 +79,8 @@ class Transformer(nn.Module):
             return linear_cross_entropy(
                 x.to(self.dtype),
                 self.classifier.weight.to(self.dtype),
-                targets
+                targets,
+                impl=self.loss_impl
             )
         else:
             return x
@@ -88,6 +98,18 @@ class Config:
     total_steps: int = 1_000
     warmup_steps: int = 50
     use_bf16: bool = True
+    loss_impl: LinearCrossEntropyImpl = LinearCrossEntropyImpl.TORCH_COMPILE
+
+# class LinearCrossEntropyImpl(enum.IntEnum):
+#     CCE = auto()
+#     TORCH_COMPILE = auto()
+#     CCE_KAHAN_FULL_C = auto()
+#     CCE_KAHAN_FULL_E = auto()
+
+#     CCE_EXACT = auto()
+#     CCE_KAHAN_FULL_C_FULL_E = auto()
+#     CCE_KAHAN_FULL = auto()
+
 
 def parse_config() -> Config:
     p = argparse.ArgumentParser()
@@ -102,11 +124,16 @@ def parse_config() -> Config:
     p.add_argument("--learning-rate",    type=float, default=Config.learning_rate)
     p.add_argument("--total-steps",      type=int,   default=Config.total_steps)
     p.add_argument("--warmup-steps",     type=int,   default=Config.warmup_steps)
-
+    p.add_argument("--loss-impl", type=str, default="torch_compile") #
     bf16 = p.add_mutually_exclusive_group()
     bf16.add_argument("--use-bf16", dest="use_bf16", action="store_true")
     bf16.add_argument("--no-bf16",  dest="use_bf16", action="store_false")
     p.set_defaults(use_bf16=Config.use_bf16)
 
     args = p.parse_args()
-    return Config(**vars(args))
+    args = vars(args)
+    args['loss_impl'] = LinearCrossEntropyImpl.TORCH_COMPILE if args['loss_impl'] == 'torch_compile' else LinearCrossEntropyImpl.CCE
+    return Config(**args)
+
+
+LinearCrossEntropyImpl
