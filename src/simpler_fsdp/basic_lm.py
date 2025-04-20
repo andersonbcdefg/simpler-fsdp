@@ -4,10 +4,12 @@ from tqdm.auto import tqdm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from logger import Logger
-from data import data_loader_fast
 from dataclasses import dataclass, field, asdict
-from model import Transformer, Config, linear_cross_entropy, parse_config
+
+from .logger import Logger
+from .data import data_loader_fast
+from .model import Transformer, Config, linear_cross_entropy, parse_config
+
 torch.backends.cuda.matmul.allow_tf32 = True
 
 def train(config: Config | None = None):

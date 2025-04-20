@@ -4,11 +4,12 @@ from tqdm.auto import tqdm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from logger import Logger
-from data import data_loader_fast
 from dataclasses import dataclass, field, asdict
-from model import Transformer, Config, linear_cross_entropy, parse_config
-from float8_utils import convert_linears_to_fp8
+
+from .logger import Logger
+from .data import data_loader_fast
+from .model import Transformer, Config, linear_cross_entropy, parse_config
+from .float8_utils import convert_linears_to_fp8
 # import torch._inductor.config as inde
 # inde.triton.cudagraphs = False
 # inde.triton.cudagraph_trees = False       # <- add this

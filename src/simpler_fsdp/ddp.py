@@ -5,14 +5,15 @@ from tqdm.auto import tqdm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from data import data_loader_fast
-from logger import Logger
 from dataclasses import dataclass, field, asdict
-from model import Transformer, Config, linear_cross_entropy, parse_config
 from contextlib import nullcontext
 # NEW! for ddp
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
+
+from .data import data_loader_fast
+from .logger import Logger
+from .model import Transformer, Config, linear_cross_entropy, parse_config
 
 def train_ddp(config: Config | None = None):
     torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
