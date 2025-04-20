@@ -8,36 +8,24 @@ from logger import Logger
 from data import data_loader_fast
 from dataclasses import dataclass, field, asdict
 from model import Transformer, Config, linear_cross_entropy, parse_config
-from float8_utils import convert_linears_to_fp8
-# import torch._inductor.config as inde
-# inde.triton.cudagraphs = False
-# inde.triton.cudagraph_trees = False       # <- add this
+torch.backends.cuda.matmul.allow_tf32 = True
 
 def train(config: Config | None = None):
     if config is None:
         config = Config()
+    print("config:", asdict(config))
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
-    scaler_enabled = not torch.cuda.is_bf16_supported()
+    dtype = torch.bfloat16 if config.use_bf16 and torch.cuda.is_bf16_supported() else torch.float16
+    print("using dtype", dtype, "on device", device)
+    scaler_enabled = True # (dtype == torch.float16) -- needed for cce
     timestamp = time.time()
     model = Transformer(
         config.vocab_size,
         config.model_dim,
         config.num_heads,
-        config.num_layers
+        config.num_layers,
+        dtype=dtype
     ).to(device)
-    if torch.cuda.get_device_capability()[0] >= 9:
-        # swap every nn.Linear that matches the regex (here: everything)
-        model = convert_linears_to_fp8(model, recipe="rowwise", filter=r".*")
-        # Torch‑Compile is required for reasonable perf with the fp8 casts
-        # print("graphs:", inde.triton.cudagraphs,
-        #       "trees:", inde.triton.cudagraph_trees)
-        # model: nn.Module = torch.compile(model, mode="max-autotune") # pyright: ignore
-    elif torch.cuda.get_device_capability() == (8, 9):
-        # swap every nn.Linear that matches the regex (here: everything)
-        model = convert_linears_to_fp8(model, recipe="rowwise", filter=r".*")
-    else:
-        print("⚠️  FP8 requested but this GPU can’t run it – falling back to BF16.")
     # model.forward = torch.compile(model.forward)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
     scheduler = torch.optim.lr_scheduler.LambdaLR(
@@ -50,11 +38,16 @@ def train(config: Config | None = None):
     steps_so_far = 0
     with open(f"runs/{timestamp}.txt", "w") as f:
         with tqdm(total=config.total_steps) as pbar:
-            for inputs, targets in data_loader_fast(config.batch_size, config.seq_len, device_id=0):
-                torch.compiler.cudagraph_mark_step_begin()
+            for inputs, targets in data_loader_fast(
+                config.data_dir,
+                config.batch_size,
+                config.seq_len,
+                world_size=1,
+                rank=0
+            ):
                 with torch.autocast(
                     device_type=device,
-                    enabled=device=="cuda",
+                    enabled=(device=="cuda"),
                     dtype=dtype
                 ):
                     loss = model(inputs.to(device), targets.to(device))
@@ -75,22 +68,6 @@ def train(config: Config | None = None):
                 if steps_so_far >= config.total_steps:
                     break
     logger.close()
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Train a simple Transformer language model")
-
-    # Add arguments for each field in Config
-    config_fields = {field.name: field.type for field in Config.__dataclass_fields__.values()}
-
-    for name, field_type in config_fields.items():
-        parser.add_argument(
-            f"--{name}",
-            type=field_type,
-            help=f"Override the default value for {name}"
-        )
-
-    return parser.parse_args()
 
 if __name__ == "__main__":
     config = parse_config()

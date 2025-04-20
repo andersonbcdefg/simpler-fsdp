@@ -98,18 +98,10 @@ class Config:
     total_steps: int = 1_000
     warmup_steps: int = 50
     use_bf16: bool = True
+    data_dir: str = "."
     loss_impl: LinearCrossEntropyImpl = LinearCrossEntropyImpl.TORCH_COMPILE
-
-# class LinearCrossEntropyImpl(enum.IntEnum):
-#     CCE = auto()
-#     TORCH_COMPILE = auto()
-#     CCE_KAHAN_FULL_C = auto()
-#     CCE_KAHAN_FULL_E = auto()
-
-#     CCE_EXACT = auto()
-#     CCE_KAHAN_FULL_C_FULL_E = auto()
-#     CCE_KAHAN_FULL = auto()
-
+    diloco_sync_every: int = 32
+    diloco_outer_lr: float = 0.6
 
 def parse_config() -> Config:
     p = argparse.ArgumentParser()
@@ -124,7 +116,11 @@ def parse_config() -> Config:
     p.add_argument("--learning-rate",    type=float, default=Config.learning_rate)
     p.add_argument("--total-steps",      type=int,   default=Config.total_steps)
     p.add_argument("--warmup-steps",     type=int,   default=Config.warmup_steps)
+    p.add_argument("--diloco-sync-every", type=int, default=Config.diloco_sync_every)
+    p.add_argument("--diloco-outer-lr", type=float, default=Config.diloco_outer_lr)
+    p.add_argument("--data-dir", type=str, default=".")
     p.add_argument("--loss-impl", type=str, default="torch_compile") #
+
     bf16 = p.add_mutually_exclusive_group()
     bf16.add_argument("--use-bf16", dest="use_bf16", action="store_true")
     bf16.add_argument("--no-bf16",  dest="use_bf16", action="store_false")
@@ -134,6 +130,3 @@ def parse_config() -> Config:
     args = vars(args)
     args['loss_impl'] = LinearCrossEntropyImpl.TORCH_COMPILE if args['loss_impl'] == 'torch_compile' else LinearCrossEntropyImpl.CCE
     return Config(**args)
-
-
-LinearCrossEntropyImpl

@@ -14,10 +14,6 @@ from contextlib import nullcontext
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-# DiLoCo specific parameters
-SYNC_EVERY = 32
-OUTER_LR = 0.6
-
 def get_global_params(outer_optimizer: torch.optim.Optimizer):
     return [
         param.data.detach().clone().to("cpu")
@@ -49,10 +45,7 @@ def train_diloco(config: Config | None = None):
         dist.broadcast(param.data, src=0)
 
     outer_optimizer = torch.optim.SGD(
-        model.parameters(),
-        lr=OUTER_LR,
-        momentum=0.9,
-        nesterov=True
+        model.parameters(), lr=config.diloco_outer_lr, momentum=0.9, nesterov=True
     )
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
     scheduler = torch.optim.lr_scheduler.LambdaLR(
@@ -71,9 +64,11 @@ def train_diloco(config: Config | None = None):
     steps_so_far = 0
     pbar = tqdm(total=config.total_steps) if device_id == 0 else None
     for inputs, targets in data_loader_fast(
+        config.data_dir,
         config.batch_size // world_size,
         config.seq_len,
-        device_id=device_id
+        world_size,
+        rank=device_id
     ):
         with torch.autocast(device_type="cuda"):
             loss = model(inputs.to(device_id), targets)
@@ -91,10 +86,13 @@ def train_diloco(config: Config | None = None):
 
             # decide whether to do diloco sync
             optimizer_steps_so_far = steps_so_far // config.accumulation_steps
-            if optimizer_steps_so_far % SYNC_EVERY == SYNC_EVERY - 1 or steps_so_far == config.total_steps - 1:
-                # do the thing!
-                if device_id == 0:
-                    print(f"perform outer step at step {steps_so_far}")
+            do_step_outer_optimizer = (
+                optimizer_steps_so_far % config.diloco_sync_every == config.diloco_sync_every - 1 or
+                steps_so_far == config.total_steps - 1 # sync at the end
+            )
+            if do_step_outer_optimizer:
+                if pbar:
+                    pbar.set_description(f"outer optimizer update...")
                 local_params = [
                     param
                     for group in optimizer.param_groups

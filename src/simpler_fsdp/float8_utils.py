@@ -36,7 +36,9 @@ def apply_to_partial(fn, t, *args, **kwargs):
     # manual (post-)scaling which we want to apply to each partial term
     # separately, thus we do this hack to "unpack" the DTensors.
     if isinstance(t, DTensor) and t.placements == (Partial(),):
-        return torch.distributed.tensor.experimental.local_map(fn, [*t.placements])(t, *args, **kwargs)
+        return torch.distributed.tensor.experimental.local_map( # pyright: ignore
+            fn, [*t.placements]
+        )(t, *args, **kwargs)
     else:
         return fn(t, *args, **kwargs)
 
@@ -97,7 +99,7 @@ class Fp8LinearFn(torch.autograd.Function):
         return out
 
     @staticmethod
-    def backward(ctx, grad_out):
+    def backward(ctx, grad_out): # pyright: ignore
         a, b_t, amax_b_t = ctx.saved_tensors
 
         # Workaround for https://github.com/pytorch/pytorch/issues/141881.
@@ -135,7 +137,7 @@ class Fp8LinearFn(torch.autograd.Function):
 class Fp8Linear(torch.nn.Linear):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         out = Fp8LinearFn.apply(input.flatten(end_dim=-2), self.weight, self.bias)
-        out = out.unflatten(0, input.shape[:-1])
+        out = out.unflatten(0, input.shape[:-1]) # pyright: ignore
         return out
 
 
@@ -160,7 +162,7 @@ def convert_linears_to_fp8(root_module: torch.nn.Module, recipe: str, filter: st
     # reduction kernel and a "persistent" reduction kernel. Since fp8 has some
     # multi-pass steps (e.g., first get amax, then scale), persistent kernels
     # should perform better.
-    torch._inductor.config.triton.multi_kernel = 1
+    torch._inductor.config.triton.multi_kernel = 1 # pyright: ignore
 
     filter_re = re.compile(filter)
     def replace(module: torch.nn.Module, name: str) -> torch.nn.Module:
@@ -220,8 +222,8 @@ if torch.__version__ < "2.7.0.dev20250107":
     # Cherry-pick of https://github.com/pytorch/pytorch/pull/143747
 
     LINEAR_REDUCTION_OP_MAP = {
-        torch.ops.aten.amax.default: "max",
-        torch.ops.aten.amin.default: "min",
+        torch.ops.aten.amax.default: "max", # pyright: ignore
+        torch.ops.aten.amin.default: "min", # pyright: ignore
     }
 
     @register_op_strategy(
@@ -291,7 +293,7 @@ if torch.__version__ < "2.7.0.dev20250107":
                 if prod(scale_mat2_strategy.shape) == 1
                 else mat2_spec
             )
-            strtg.input_specs.extend([scale_self_spec, scale_mat2_spec])
+            strtg.input_specs.extend([scale_self_spec, scale_mat2_spec]) # pyright: ignore
             if (
                 is_tensor_shardable(self_strategy.shape, self_spec)
                 and is_tensor_shardable(mat2_strategy.shape, mat2_spec)
@@ -311,6 +313,6 @@ if torch.__version__ < "2.7.0.dev20250107":
 
         return mm_strategy
 
-    @register_op_strategy(torch.ops.aten._scaled_mm.default)
+    @register_op_strategy(torch.ops.aten._scaled_mm.default) # pyright: ignore
     def mm_strategy(mesh: DeviceMesh, op_schema: OpSchema) -> OpStrategy:
         return _mm_like_strategy("mk,kn->mn", mesh, op_schema)

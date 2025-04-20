@@ -1,7 +1,13 @@
 [project]
-name = "simpler-fsdp"
+name = "simpler_fsdp"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "torch",
+    "numpy",
+    "matplotlib",
+    "tiktoken",
+    "hf-transfer"
+]

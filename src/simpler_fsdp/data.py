@@ -46,11 +46,8 @@ def tokenize_parquet_dir(
 
     print(f"Total tokens written: {total:,}")
 
-
-
 def tokenize_all_streaming(
     world_size: int,             # W
-    max_tokens_per_shard: int = 2**22,   # e.g. 2**22
     buf_cap: int = 1 << 20,       # flush every 1 M tokens
     dataset_name: str = "pszemraj/simple_wikipedia",
 ):
@@ -74,6 +71,14 @@ def tokenize_all_streaming(
             batch_size=1000
         )
 
+def shard_big_file(
+    big_file_path: str,
+    output_dir: str,
+    world_size: int,
+    max_tokens_per_shard: int = 2**22,   # e.g. 2**22
+    remove_after_sharding: bool = False
+):
+    big_path = Path(big_file_path)
     # truncate to same # tokens per worker and multiple of 128
     mod_factor = world_size * 128 # each worker gets multiple of 128 tokens
     total_tokens = big_path.stat().st_size // 4
@@ -102,26 +107,30 @@ def tokenize_all_streaming(
         for j in range(world_size):
             ntok = shard_sizes[i]
             end = start + ntok
-            mmap[start : end].tofile(f"final_data_{shard_idx}.bin")
+            mmap[start : end].tofile(f"{output_dir}/data_{shard_idx}.bin")
             shard_idx += 1
             start = end
 
     mmap._mmap.close() # pyright: ignore
-    big_path.unlink() # keep disk tidy
+    if remove_after_sharding:
+        big_path.unlink() # keep disk tidy
 
 def data_loader_fast(
+    data_dir: str,
     batch_size: int,
     seq_len: int,
     world_size: int,   # W
-    rank: int,         # this worker’s id  (0 ≤ rank < world_size)
+    rank: int,         # this worker’s id
     seed: int = 0
 ):
     # discover my shard set
-    shards = sorted(glob.glob("final_data_*.bin"))
-    shards = [p for p in shards
-              if int(p.split('_')[-1].split('.')[0]) % world_size == rank]
+    shards = sorted(glob.glob(f"{data_dir}/*.bin"))
+    shards = [
+        p for p in shards
+        if int(p.split('_')[-1].split('.')[0]) % world_size == rank
+    ]
     if not shards:
-        raise RuntimeError("rank has no shards — check world_size/rank")
+        raise RuntimeError(f"rank {rank} has no shards — check world_size/rank")
 
     stride   = seq_len + 1
     rng_ep   = torch.Generator().manual_seed(seed)   # epoch‑level rng
@@ -155,39 +164,15 @@ def data_loader_fast(
                 targets = buf[:, 1:].to(rank, non_blocking=True)
                 yield inputs, targets
 
-
-# def data_loader_fast(
-#     batch_size: int,
-#     seq_len: int,
-#     device_id: int,
-#     seed: int = 0
-# ):
-#     """Exactly‑once shuffle, pure‑torch implementation."""
-#     path   = f"final_data_{device_id}.bin"
-#     tokens = torch.from_file(
-#         path,
-#         dtype=torch.int32,
-#         size=os.path.getsize(path) // 4         # bytes → int32 count
-#     ).to(torch.int64)                           # easier math
-
-#     stride  = seq_len + 1
-#     n_seqs  = (tokens.numel() - 1) // seq_len
-#     rng     = torch.Generator().manual_seed(seed)
-#     arange_ = torch.arange(stride, dtype=torch.int64)
-
-#     while True:                                 # epoch loop
-#         perm = torch.randperm(n_seqs, generator=rng)           # ~2 MB
-#         for s in range(0, n_seqs - batch_size + 1, batch_size):
-#             starts = perm[s:s + batch_size] * seq_len          # (B,)
-#             idx    = starts[:, None] + arange_                 # (B, stride)
-#             batch  = tokens[idx]                               # CPU gather
-
-#             buf = torch.empty_like(batch, pin_memory=True)     # staging
-#             buf.copy_(batch, non_blocking=True)
-
-#             inputs  = buf[:, :-1].to(device_id, non_blocking=True)
-#             targets = buf[:, 1:].to(device_id, non_blocking=True)
-#             yield inputs, targets
+def download_from_hub(repo_id: str, local_dir: str):
+    import os
+    os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+    import huggingface_hub
+    huggingface_hub.snapshot_download(
+        repo_id,
+        repo_type="dataset",
+        local_dir=local_dir
+    )
 
 if __name__ == "__main__":
     import sys
