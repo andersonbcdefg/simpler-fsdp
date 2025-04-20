@@ -135,6 +135,7 @@ def data_loader_fast(
     stride   = seq_len + 1
     rng_ep   = torch.Generator().manual_seed(seed)   # epoch‑level rng
     arange_  = torch.arange(stride, dtype=torch.int64)
+    epochs_so_far = 0
 
     while True:                                      # epoch loop
         order = torch.randperm(len(shards), generator=rng_ep)
@@ -147,9 +148,7 @@ def data_loader_fast(
             ).to(torch.int64)
 
             n_seqs = (tokens.numel() - 1) // seq_len
-            rng_shard = torch.Generator().manual_seed(
-                seed ^ int.from_bytes(path.encode(), "little")
-            )
+            rng_shard = torch.Generator().manual_seed(seed + epochs_so_far)
 
             perm = torch.randperm(n_seqs, generator=rng_shard)
             for s in range(0, n_seqs - batch_size + 1, batch_size):
