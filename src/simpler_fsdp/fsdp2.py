@@ -33,14 +33,16 @@ def train_fsdp(config: Config | None = None):
         config = Config()
     if device_id == 0:
         print("config:", asdict(config))
-
+    dtype = torch.bfloat16 if config.use_bf16 and torch.cuda.is_bf16_supported() else torch.float16
     assert config.batch_size % world_size == 0, "Batch size must be divisible by world size"
     timestamp = time.time()
     model = Transformer(
         config.vocab_size,
         config.model_dim,
         config.num_heads,
-        config.num_layers
+        config.num_layers,
+        loss_impl=config.loss_impl,
+        dtype=dtype
     ).to(device_id)
 
     # do the fsdp sharding

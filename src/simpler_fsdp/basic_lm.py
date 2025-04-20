@@ -26,6 +26,7 @@ def train(config: Config | None = None):
         config.model_dim,
         config.num_heads,
         config.num_layers,
+        loss_impl=config.loss_impl,
         dtype=dtype
     ).to(device)
     # model.forward = torch.compile(model.forward)

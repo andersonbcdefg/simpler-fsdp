@@ -35,12 +35,15 @@ def train_diloco(config: Config | None = None):
     if device_id == 0:
         print("config:", asdict(config))
     assert config.batch_size % world_size == 0, "Batch size must be divisible by world size"
+    dtype = torch.bfloat16 if config.use_bf16 and torch.cuda.is_bf16_supported() else torch.float16
     timestamp = time.time()
     model = Transformer(
         config.vocab_size,
         config.model_dim,
         config.num_heads,
-        config.num_layers
+        config.num_layers,
+        loss_impl=config.loss_impl,
+        dtype=dtype
     ).to(device_id)
     # since no DDP wrapper, manually sync initial model weights
     for param in model.parameters():

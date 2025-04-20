@@ -19,14 +19,16 @@ def train(config: Config | None = None):
         config = Config()
     print("config:", asdict(config))
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+    dtype = torch.bfloat16 if config.use_bf16 and torch.cuda.is_bf16_supported() else torch.float16
     scaler_enabled = not torch.cuda.is_bf16_supported()
     timestamp = time.time()
     model = Transformer(
         config.vocab_size,
         config.model_dim,
         config.num_heads,
-        config.num_layers
+        config.num_layers,
+        loss_impl=config.loss_impl,
+        dtype=dtype
     ).to(device)
     if torch.cuda.get_device_capability()[0] >= 9:
         # swap every nn.Linear that matches the regex (here: everything)
