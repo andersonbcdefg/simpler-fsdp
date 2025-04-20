@@ -47,6 +47,7 @@ def train_ddp(config: Config | None = None):
 
     logger = Logger("ddp", "runs", enabled=(device_id == 0))
     steps_so_far = 0
+    tokens_so_far = 0
     pbar = tqdm(total=config.total_steps) if device_id == 0 else None
     for inputs, targets in data_loader_fast(
         config.data_dir,
@@ -60,7 +61,8 @@ def train_ddp(config: Config | None = None):
         logger.log({
             "loss": loss.item(),
             "lr": scheduler.get_last_lr()[0],
-            "step": steps_so_far
+            "step": steps_so_far,
+            "tokens": tokens_so_far
         })
         do_optimizer_step = steps_so_far % config.accumulation_steps == config.accumulation_steps - 1
         context = nullcontext() if do_optimizer_step else ddp_model.no_sync()
@@ -75,6 +77,7 @@ def train_ddp(config: Config | None = None):
         scheduler.step()
 
         steps_so_far += 1
+        tokens_so_far += inputs.numel() * world_size # account for all ranks
         if pbar and steps_so_far % 5 == 0:
             pbar.set_description(f"loss: {loss.item():.1f}, lr: {scheduler.get_last_lr()[0]:.1e}")
             pbar.update(steps_so_far - pbar.n)

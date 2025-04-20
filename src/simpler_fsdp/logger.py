@@ -10,6 +10,7 @@ class Entry(TypedDict):
     loss: float
     lr: float
     step: int
+    tokens: int
 
 class Logger:
     def __init__(self, run_name: str, log_dir: str, enabled: bool = True):

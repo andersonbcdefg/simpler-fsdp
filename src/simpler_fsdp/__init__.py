@@ -30,43 +30,47 @@ def smooth(arr, n=20):
     return window_sums / window_size
 
 def plot_multiple_files(
-    file_paths, labels, smooth_window=20
+    file_paths,
+    labels,
+    smooth_window=None,
+    x_val = "step"
 ):
-    """
-    Plot data from multiple files with smoothing.
-
-    Args:
-        file_paths: List of file paths containing the data (one value per line)
-        labels: List of labels for each file's data
-        smooth_window: Window size for smoothing (half window, default=20)
-        title: Plot title (optional)
-        xlabel: X-axis label (optional)
-        ylabel: Y-axis label (optional)
-        figsize: Figure size as tuple (width, height)
-        save_path: Path to save the figure (optional)
-
-    Returns:
-        The figure and axes objects
-    """
     if len(file_paths) != len(labels):
-        raise ValueError("Number of file paths must match number of labels")
+            raise ValueError("Number of file paths must match number of labels")
 
     for file_path, label in zip(file_paths, labels):
         try:
             if file_path.endswith(".txt"):
                 # Read and convert data from file
                 with open(file_path, 'r') as f:
-                    data = [float(x) for x in f.readlines()]
+                    losses = [float(x) for x in f.readlines()]
+                times = None
+                tokens = None
+                if x_val != "step":
+                    raise ValueError("Invalid x_val for .txt file")
             else:
-                data = pd.read_json(file_path, orient="records", lines=True)['loss'].to_list()
+                data = pd.read_json(file_path, orient="records", lines=True)
+                print(data.columns)
+                losses = data['loss'].to_list()
+                first_timestamp = data['timestamp'].min()
+                data['timestamp'] = (data['timestamp'] - first_timestamp).dt.total_seconds()
+                times = data['timestamp'].to_list()
+                tokens = data['tokens'].to_list()
 
 
             # Apply smoothing
-            smoothed_data = smooth(data, n=smooth_window)
+            if smooth_window is not None:
+                losses = smooth(losses, n=smooth_window)
 
             # Plot with label
-            plt.plot(smoothed_data, label=label)
-
+            if x_val == "step":
+                plt.plot(losses, label=label, alpha=0.5)
+            elif x_val == "time":
+                plt.plot(times, losses, label=label, alpha=0.3) # pyright: ignore
+            elif x_val == "tokens":
+                plt.plot(tokens, losses, label=label, alpha=0.3) # pyright: ignore
+            else:
+                raise ValueError(f"Invalid x_val: {x_val}")
         except Exception as e:
             print(f"Error processing file {file_path}: {e}")
 
