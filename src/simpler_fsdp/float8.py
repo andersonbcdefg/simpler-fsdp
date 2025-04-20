@@ -17,6 +17,7 @@ from .float8_utils import convert_linears_to_fp8
 def train(config: Config | None = None):
     if config is None:
         config = Config()
+    print("config:", asdict(config))
     device = "cuda" if torch.cuda.is_available() else "cpu"
     dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
     scaler_enabled = not torch.cuda.is_bf16_supported()

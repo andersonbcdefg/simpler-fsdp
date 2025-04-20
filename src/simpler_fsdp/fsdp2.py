@@ -31,6 +31,8 @@ def train_fsdp(config: Config | None = None):
 
     if config is None:
         config = Config()
+    if device_id == 0:
+        print("config:", asdict(config))
 
     assert config.batch_size % world_size == 0, "Batch size must be divisible by world size"
     timestamp = time.time()
